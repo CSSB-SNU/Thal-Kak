@@ -1,0 +1,68 @@
+# Thal-Kak model config -- one section per structure predictor, keyed by model
+# name. `thalkak` reads this (full mode: Method.model_config; structure mode:
+# --model_config; default examples/model_config.yaml) and hands each model its
+# own section, so a `structure: [...]` sweep can share one file. Edit a section
+# to change that model's inference config.
+
+boltz2:
+  n_samples: 5
+  no_kernels: True
+  output_format: pdb
+  recycling_steps: 3
+  sampling_steps: 200
+  subsample_msa: True   # boltz's native MSA subsampler (random 1024 rows per recycle); omit/False = full MSA
+
+chai1:
+  num-trunk-samples: 1
+  num-diffn-samples: 5
+  num-diffn-timesteps: 200
+  recycle-msa-subsample: 0   # chai's per-recycle subsampler: 0 = full MSA, any positive value = subsample to 4096 rows (chai-hardcoded; value magnitude ignored)
+  num-trunk-recycles: 3
+  constraint-path:
+  use-esm-embeddings: True
+  fasta-names-as-cif-chains: False
+
+# protenix_v1 runs a v1-generation checkpoint (368M base); protenix_v2 runs the
+# 464M scaled-up protenix-v2. model_name is required and names the checkpoint --
+# change it to another checkpoint of the same generation if wanted (e.g.
+# protenix_base_20250630_v1.0.0 for protenix_v1).
+protenix_v1:
+  N_sample: 5
+  N_step: 200
+  N_cycle: 10
+  model_name: protenix_base_default_v1.0.0
+  data.msa.min_size.test:   # protenix subsamples the MSA by default (random depth per recycle). null/omit = native subsampling. Set to 16384 (== featurization cap, max usable depth) to force full MSA on every recycle; raw MSAs deeper than 16384 are truncated to the first 16384 rows at featurization regardless.
+
+protenix_v2:
+  N_sample: 5
+  N_step: 200
+  N_cycle: 10
+  model_name: protenix-v2
+  use_tfg_guidance: True   # Training-Free Guidance; v2 only (protenix_v1 rejects this key)
+  data.msa.min_size.test:   # protenix subsamples the MSA by default (random depth per recycle). null/omit = native subsampling. Set to 16384 (== featurization cap, max usable depth) to force full MSA on every recycle; raw MSAs deeper than 16384 are truncated to the first 16384 rows at featurization regardless.
+
+esmfold2:
+  # Argument names match esm.ESMFold2InputBuilder.fold() / ESMFold2Model.forward().
+  # Model variant: "biohub/ESMFold2" (full, supports MSA) or "biohub/ESMFold2-Fast"
+  model_variant: "biohub/ESMFold2"
+  # MSA is only consumed by the full variant. Set false (or run -Fast) to skip
+  # the merged paired+unpaired a3m construction.
+  use_msa: true
+  # Trunk refinement iterations.
+  num_loops: 3
+  # Diffusion sampling steps per sample.
+  num_sampling_steps: 50
+  # Number of samples produced per seed (each becomes one PDB output).
+  num_diffusion_samples: 5
+  # MSA inference-time diversity (full variant only).
+  # msa_max_depth: null disables per-loop row subsampling (reproduces the
+  #   pre-diversity behavior); set an int (e.g. 1024) to enable it.
+  # msa_column_mask_rate: 0.0 disables column masking; e.g. 0.1 to enable.
+  msa_max_depth: null
+  msa_column_mask_rate: 0.0
+  # Optional accelerators.
+  kernel_backend: cuequivariance  # "cuequivariance" | "fused" | null -- trunk kernel path (speed)
+  cueq_msa: true         # cueq on the MSA encoder too (needs kernel_backend: cuequivariance)
+  tf32: true             # TF32 on fp32 matmuls -- matches the ESMFold2 paper's inference config
+  chunk_size: null       # int|null -- tile L^2 transients (memory, for large complexes); can cost speed
+  offload_lm: true       # park ESM-C on CPU during folding (memory; no result change)

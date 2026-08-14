@@ -1,0 +1,123 @@
+# Unified Thal-Kak env: orchestrator + OpenMM relaxation +
+# structure prediction models (boltz, chai-1, esmfold2, protenix) +
+# ColabFold MSA generation.
+#
+# Install with:
+#   bash install.sh
+#
+# One post-install step remains (not expressible in this file):
+#   --no-deps installs of boltz / chai / protenix (requirements-nodeps.txt),
+# invoked by install.sh.
+
+name: thalkak
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - python=3.12
+  - pip
+  - hmmer=3.4.0              # MSA tooling
+  # bioconda's hmmer links libopenblas.so.0 directly but declares only gsl, so
+  # libopenblas can be absent and nhmmer/hmmbuild then fail to load (RNA MSA dies).
+  # Request the library itself -- do NOT pin the BLAS variant (libblas=*=*openblas):
+  # ambertools -> mdtraj -> pytables -> numexpr requires libblas *mkl, so pinning the
+  # variant makes openff-toolkit unsolvable. MKL and libopenblas coexist fine here.
+  - libopenblas
+  - openmm=8.4.0             # openmm relax (CUDA build pulled by cuda-version pin below)
+  - pdbfixer=1.12.0          # PDB cleanup before openmm minimization
+  - cuda-version=12.6        # match torch cu126 wheels for openmm/CUDA plugins
+  - rdkit=2024.09.6          # openff-toolkit dep + chai (~=2024.9.5) compatible
+  - ambertools=24.8          # antechamber/GAFF backend for openmmforcefields
+  - openff-toolkit=0.16.10   # openff Molecule + GAFF/SMIRNOFF template generators
+  - openmmforcefields=0.15.1 # GAFF/SMIRNOFF template generators for ligands
+  # ColabFold MSA + template search binaries (bioconda).
+  - kalign2=2.04
+  - hhsuite=3.3.0
+  - mmseqs2=18.8cc5c
+  # install_db.sh calls zstd and aria2c by name, and install.sh patches
+  # colabfold's templates.py with patch(1). All three currently arrive by
+  # accident -- zstd rides on ld_impl_linux-64/libtiff/libboost, aria2 is an
+  # mmseqs2 dependency, patch comes from the host -- so they are named here
+  # rather than left to someone else's dependency graph.
+  - zstd
+  - aria2
+  - patch
+  - pip:
+      # PyTorch matched to cuequivariance-ops-torch-cu12 0.8.0 ABI (torch 2.7+cu126).
+      - --extra-index-url https://download.pytorch.org/whl/cu126
+      - torch==2.7.1
+      - torchvision==0.22.1
+      - torchaudio==2.7.1
+      # Orchestrator + pipeline glue.
+      - pyyaml==6.0.2
+      - biopython==1.84
+      - gemmi==0.7.5              # esmfold2 CIF parsing needs 0.7+; chai/protenix runtime OK
+      - pandas==2.3.3             # chai (~=2.1) compatible
+      - matplotlib==3.10.9
+      - tqdm==4.68.1
+      # Numpy / scipy / numba sweet spot for boltz + protenix + esmfold2.
+      - numpy==2.4.4
+      - scipy==1.17.1
+      - numba==0.65.1
+      - llvmlite==0.47.0
+      # Boltz runtime deps (boltz itself is installed --no-deps in step 2 of install.sh).
+      - pytorch-lightning==2.5.0
+      - fairscale==0.4.13
+      - hydra-core==1.3.2
+      - mashumaro==3.14
+      - modelcif==1.2
+      - chembl_structure_pipeline==1.2.2
+      - dm-tree==0.1.10
+      - einops==0.8.0
+      - einx==0.3.0
+      - wandb==0.18.7
+      # ESMFold2 stack. esm 3.3.0 (Biohub) is required for ESMFold2 and brings
+      # the Biohub transformers fork (transformers.models.esmfold2) as a
+      # transitive, pinned to @main by esm. install.sh re-pins transformers to
+      # a fixed commit post-install (it can't be pinned here -- esm's @main
+      # direct-URL requirement would conflict / override it).
+      - git+https://github.com/Biohub/esm.git@cf002f1d2fb9220a0918fc8c5ea4e3b56d28fbaf
+      - accelerate==1.13.0
+      - tokenizers==0.22.2
+      - huggingface_hub==0.36.2
+      - safetensors==0.8.0
+      - biotite==1.6.0
+      # Chai runtime deps (chai itself is installed --no-deps in step 2 of
+      # install.sh; its pyproject pins numpy~=1.21 / gemmi~=0.6.3 which would
+      # downgrade the shared deps above, so we list its actual runtime deps here).
+      - antipickle==0.2.0
+      - beartype==0.22.9
+      - jaxtyping==0.3.10
+      - pandera==0.31.1
+      - tmtools==0.3.0
+      - typer==0.26.7
+      - pyarrow==24.0.0           # pandas[parquet]
+      - gcsfs==2026.5.0           # pandas[gcp]
+      - s3fs==2026.3.0            # pandas[aws]
+      # cuequivariance trio for protenix (pinned to torch 2.7.1+cu126 ABI).
+      - cuequivariance==0.8.0
+      - cuequivariance-torch==0.8.0
+      - cuequivariance-ops-torch-cu12==0.8.0
+      - opt_einsum==3.4.0
+      # Protenix-only deps (protenix itself is installed --no-deps in step 2 of install.sh).
+      - ml_collections==1.1.0
+      - ipywidgets==8.1.7
+      - py3Dmol==2.5.2
+      - pdbeccdutils==1.0.0
+      - scikit-learn-extra==0.3.0
+      - deepspeed==0.17.5
+      - optree==0.17.0
+      - icecream==2.1.7
+      - ipdb==0.13.13
+      # ColabFold MSA generation (colabfold_batch --msa-only). The
+      # alphafold extra brings alphafold-colabfold + dm-haiku +
+      # tensorflow-cpu + jax/jaxlib. We never run the folding path,
+      # but colabfold_batch imports alphafold at module top so the
+      # full stack is required. absl-py pinned <2.0 to satisfy
+      # dm-haiku 0.0.16. The kalign-first patch in MSA/script/patches
+      # is applied post-install by install.sh.
+      - colabfold[alphafold]==1.6.1
+      - absl-py==1.4.0
+      # Editable install of the Thal-Kak orchestrator itself.
+      - -e .

@@ -1,0 +1,41 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Caches / coverage
+.cache/
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Environment secrets
+.env
+
+# OS & IDE
+.DS_Store
+.vscode/
+.idea/
+
+# DB
+db/
+
+# Pipeline runtime scratch
+temp/
+
+# pixi local environment
+.pixi/

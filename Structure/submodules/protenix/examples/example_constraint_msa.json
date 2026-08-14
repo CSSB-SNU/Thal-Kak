@@ -1,0 +1,169 @@
+[
+    {
+        "sequences": [
+            {
+                "proteinChain": {
+                    "sequence": "YMLDLQPETTDLYCGGGGSGGGGSGGGGSIQRTPKIQVYSRHPAENGKSNFLNCYVSGFHPSDIEVDLLKNGERIEKVEHSDLSFSKDWSFYLLYYTEFTPTEKDEYACRVNHVTLSQPKIVKWDRDMGGGGSGGGGSGGGGSGGGGSGSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGCYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMCAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQRTDAPKTHMTHHAVSDHEATLRCWALSFYPAEITLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGQEQRYTCHVQHEGLPKPLTLRWEHHHHHH",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/1/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            },
+            {
+                "proteinChain": {
+                    "sequence": "EVKLVESGGGLVQPGGSLRLSCAASGSIFSINTMGWYRQTPGKQRDLVADISSGGSTKYGDSVKGRFTISRDNTKNTVYLQMNSLKPEDTAVYYCYGLSYSNDDYWGQGTQVTVSS",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/2/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            }
+        ],
+        "modelSeeds": [],
+        "name": "7st3_base"
+    },
+    {
+        "sequences": [
+            {
+                "proteinChain": {
+                    "sequence": "YMLDLQPETTDLYCGGGGSGGGGSGGGGSIQRTPKIQVYSRHPAENGKSNFLNCYVSGFHPSDIEVDLLKNGERIEKVEHSDLSFSKDWSFYLLYYTEFTPTEKDEYACRVNHVTLSQPKIVKWDRDMGGGGSGGGGSGGGGSGGGGSGSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGCYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMCAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQRTDAPKTHMTHHAVSDHEATLRCWALSFYPAEITLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGQEQRYTCHVQHEGLPKPLTLRWEHHHHHH",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/1/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            },
+            {
+                "proteinChain": {
+                    "sequence": "EVKLVESGGGLVQPGGSLRLSCAASGSIFSINTMGWYRQTPGKQRDLVADISSGGSTKYGDSVKGRFTISRDNTKNTVYLQMNSLKPEDTAVYYCYGLSYSNDDYWGQGTQVTVSS",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/2/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            }
+        ],
+        "modelSeeds": [],
+        "name": "7st3_pocket_1_8",
+        "constraint": {
+            "pocket": {
+                "binder_chain": {
+                    "entity": 2,
+                    "copy": 1
+                },
+                "contact_residues": [
+                    {
+                        "entity": 1,
+                        "copy": 1,
+                        "position": 69
+                    }
+                ],
+                "max_distance": 8
+            }
+        }
+    },
+    {
+        "sequences": [
+            {
+                "proteinChain": {
+                    "sequence": "YMLDLQPETTDLYCGGGGSGGGGSGGGGSIQRTPKIQVYSRHPAENGKSNFLNCYVSGFHPSDIEVDLLKNGERIEKVEHSDLSFSKDWSFYLLYYTEFTPTEKDEYACRVNHVTLSQPKIVKWDRDMGGGGSGGGGSGGGGSGGGGSGSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGCYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMCAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQRTDAPKTHMTHHAVSDHEATLRCWALSFYPAEITLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGQEQRYTCHVQHEGLPKPLTLRWEHHHHHH",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/1/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            },
+            {
+                "proteinChain": {
+                    "sequence": "EVKLVESGGGLVQPGGSLRLSCAASGSIFSINTMGWYRQTPGKQRDLVADISSGGSTKYGDSVKGRFTISRDNTKNTVYLQMNSLKPEDTAVYYCYGLSYSNDDYWGQGTQVTVSS",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/7st3/msa/2/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            }
+        ],
+        "modelSeeds": [],
+        "name": "7st3_token_1_15",
+        "constraint": {
+            "contact": [
+                {
+                    "entity1": 1,
+                    "copy1": 1,
+                    "position1": 72,
+                    "entity2": 2,
+                    "copy2": 1,
+                    "position2": 103,
+                    "max_distance": 15
+                }
+            ]
+        }
+    },
+    {
+        "sequences": [
+            {
+                "proteinChain": {
+                    "sequence": "MSSPLKNALVTAMLAGGALSSPTKQHVGIPVNASPEVGPGKYSFKQVRNPNYKFNGPLSVKKTYLKYGVPIPAWLEDAVQNSTSGLAERSTGSATTTPIDSLDDAYITPVQIGTPAQTLNLDFDTGSSDLWVFSSETTASEVDGQTIYTPSKSTTAKLLSGATWSISYGDGSSSSGDVYTDTVSVGGLTVTGQAVESAKKVSSSFTEDSTIDGLLGLAFSTLNTVSPTQQKTFFDNAKASLDSPVFTADLGYHAPGTYNFGFIDTTAYTGSITYTAVSTKQGFWEWTSTGYAVGSGTFKSTSIDGIADTGTTLLYLPATVVSAYWAQVSGAKSSSSVGGYVFPCSATLPSFTFGVGSARIVIPGDYIDFGPISTGSSSCFGGIQSSAGIGINIFGDVALKAAFVVFNGATTPTLGFASK",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/5sak/1/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            },
+            {
+                "ligand": {
+                    "ligand": "CCD_ZRY",
+                    "count": 1
+                }
+            }
+        ],
+        "modelSeeds": [],
+        "name": "5sak_base"
+    },
+    {
+        "sequences": [
+            {
+                "proteinChain": {
+                    "sequence": "MSSPLKNALVTAMLAGGALSSPTKQHVGIPVNASPEVGPGKYSFKQVRNPNYKFNGPLSVKKTYLKYGVPIPAWLEDAVQNSTSGLAERSTGSATTTPIDSLDDAYITPVQIGTPAQTLNLDFDTGSSDLWVFSSETTASEVDGQTIYTPSKSTTAKLLSGATWSISYGDGSSSSGDVYTDTVSVGGLTVTGQAVESAKKVSSSFTEDSTIDGLLGLAFSTLNTVSPTQQKTFFDNAKASLDSPVFTADLGYHAPGTYNFGFIDTTAYTGSITYTAVSTKQGFWEWTSTGYAVGSGTFKSTSIDGIADTGTTLLYLPATVVSAYWAQVSGAKSSSSVGGYVFPCSATLPSFTFGVGSARIVIPGDYIDFGPISTGSSSCFGGIQSSAGIGINIFGDVALKAAFVVFNGATTPTLGFASK",
+                    "count": 1,
+                    "msa": {
+                        "precomputed_msa_dir": "./examples/5sak/1/",
+                        "pairing_db": "uniref100"
+                    }
+                }
+            },
+            {
+                "ligand": {
+                    "ligand": "CCD_ZRY",
+                    "count": 1
+                }
+            }
+        ],
+        "modelSeeds": [],
+        "name": "5sak_atom_1_3_5",
+        "constraint": {
+            "contact": [
+                {
+                    "entity1": 1,
+                    "copy1": 1,
+                    "position1": 311,
+                    "atom1": "CG2",
+                    "entity2": 2,
+                    "copy2": 1,
+                    "position2": 1,
+                    "atom2": "C10",
+                    "max_distance": 5,
+                    "min_distance": 3
+                }
+            ]
+        }
+    }
+]

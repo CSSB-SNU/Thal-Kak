@@ -1,0 +1,105 @@
+# MSA config for `--msa mmseqs_hhblits_cssb` (runs BOTH engines, merges per chain).
+# Self-contained: `mmseqs` + `hhblits` source sub-blocks + caps + template + plot.
+# Each source runs as a self-contained single-source build (kept under
+# `_src_mmseqs/` and `_src_hhblits/`), then the two are combined per chain — see
+# the `merge:` block below for how, since that is configurable. Paired blocks
+# always merge at the pair level, mmseqs first, cross-chain positional alignment
+# preserved, and are never hhfiltered.
+
+mmseqs:                      # same schema as msa_config.mmseqs.yaml (dbs / dedup / search)
+  # dbs[0] must stay `uniref30_2302` (Stage A profile + pairing DB); refused at
+  # startup otherwise. The hhblits block below has no such constraint — that is
+  # why the two lists start with different DBs.
+  dbs:
+    - uniref30_2302
+    - uniref100_2026_01
+    - bfd_reduced
+    - mgnify_clusters
+    - logan_human
+    - envhog_std             # expandable rebuild; the hhblits block below keeps `envhog`
+  dedup:
+    # `merge.mode: cap_walk` only. The default `leveled` always dedups on raw_seq
+    # and never reads this, so editing it there changes nothing and does not rebuild.
+    mode: raw_seq            # none | raw_seq | dedup_key (per-source Stage-1 dedup)
+  search:
+    num_iterations:    3
+    max_seqs:          10000
+    initial_eval:      0.1
+    expand_max_seq_id: 0.95
+    alt_ali:           10
+    filter_min_enable: 1000
+    pair_align_eval:   0.001
+    sensitivity:  8.0
+    filter:       true
+    diff:         3000
+    db_load_mode: 2
+    align_eval:   10
+    qsc:          -20.0
+    max_accept:   1000000
+    expand_eval:  .inf
+hhblits:                     # same schema as msa_config.hhblits.yaml (dbs / n_iter_* / evalue)
+  dbs:
+    - uniref100_2026_01      # Phase 2 — primary UniRef profile
+    - uniref30_2302          # Phase 3 — env DB (clustered UniRef)
+    - bfd                    # Phase 3 — env DB
+    - mgnify_clusters        # Phase 3 — env DB
+    - logan_human            # Phase 3 — env DB
+    - logan_nonhuman         # Phase 3 — env DB
+    - envhog                 # Phase 3 — env DB
+  n_iter_uniref: 3
+  n_iter_env:    3
+  evalue:        0.001
+
+# Unpaired merge strategy (same block in all three cssb config files).
+#   leveled  = group each chain's per-DB a3ms by DB kind (uniref / env) ACROSS BOTH
+#              SOURCES, raw_seq dedup inside the group, staged hhfilter once per
+#              group, then stack uniref-on-top / env-below. Grouping across sources
+#              (rather than merging two separately-filtered sources) is the point:
+#              one filter pass per kind, no source boundary inside a group. mmseqs
+#              rows precede hhblits rows, so mmseqs wins a dedup tie.
+#              For the hhblits side only `hhblits.dbs[0]` counts as uniref —
+#              uniref30 sits in its Phase 3 and is an env DB there.
+#              Requires `hhfilter` on PATH (from `hhsuite` in environment.yml).
+#   cap_walk = legacy: each source cap-walks its own per-DB a3ms, then the two
+#              results are merged mmseqs-first and re-capped to caps.total_max.
+# `mode` and every hhfilter knob are part of the re-run skip key.
+merge:
+  mode: leveled              # leveled | cap_walk
+  hhfilter:
+    id:           90
+    cov_hi:       75
+    cov_lo:       50
+    depth_thresh: 2000
+    min_keep:     100
+
+# Hit caps + total MSA depth, in a3m RECORDS (query row 0 included).
+# Under the default `merge.mode: leveled` only `paired_max` and `total_max` are
+# read; `per_kind` and `priority` are cap_walk-only and are neither validated nor
+# compared for re-run reuse there, so you can add a DB to `dbs` above without
+# touching `priority`.
+caps:
+  per_kind:   { uniref: 10000, env: 5000 }   # cap_walk only: head-N per DB
+  paired_max: 8192
+  total_max:  16384
+  priority:   [uniref30_2302, uniref100_2026_01, bfd_reduced, bfd, mgnify_clusters, envhog_std, envhog, logan_human, logan_nonhuman]
+
+# Local template search — the combined path ALWAYS runs BOTH template engines
+# (mmseqs vs BioMolDB + local hmmer) and merges mmseqs-first, so there is no
+# `engine` knob here (it would be ignored). query_a3m feeds the hmmer side
+# (uniref100 = the hhblits UniRef profile); max_date/max_hits apply to both.
+template:
+  enable:    true
+  query_a3m: uniref100
+  # Cutoff on the PDB entry's initial RELEASE date, not its deposition date --
+  # an embargoed entry is deposited long before it is public, so filtering on
+  # deposition would admit structures that were not available at the cutoff.
+  # Release dates come from the snapshot's release_dates.tsv; an entry missing
+  # from it falls back to deposition_date. Both engines behave this way.
+  max_date:  "3000-01-01"    # 3000-01-01 = no cutoff
+  max_hits:  20
+
+plot:
+  enable:             true
+  per_db_enable:      true
+  identity_threshold: 0.62
+  subsample_cap:      10000

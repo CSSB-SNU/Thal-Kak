@@ -1,0 +1,560 @@
+Thal-Kak
+Copyright 2026 CSSB, Seoul National University
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+================================================================================
+Third-party components REDISTRIBUTED in this repository
+================================================================================
+
+The following third-party code is vendored into this repository and is
+redistributed under its original license. Where files were modified, a
+prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
+
+1. Protenix
+   - Path:    Structure/submodules/protenix/
+   - Source:  https://github.com/bytedance/Protenix (commit c3bfc36)
+   - License: Apache License 2.0 (see Structure/submodules/protenix/LICENSE)
+   - Copyright 2024 ByteDance and/or its affiliates.
+   - MODIFIED by CSSB Thal-Kak (2026):
+       * protenix/model/sample_confidence.py — added `calculate_chain_pair_pae`
+         and wired chain-pair PAE into summary_confidence.
+       * protenix/data/esm/compute_esm.py — replaced the fair-esm backend with
+         HuggingFace transformers for ESM2 embeddings (to avoid the `esm`
+         namespace clash with ESMFold2's EvolutionaryScale esm package in the
+         unified environment).
+       * protenix/data/inference/infer_dataloader.py — relaxed
+         `max_template_date` (2021-09-30 -> 2100-01-10).
+   - Protenix itself incorporates code referring to OneFlow, FastFold, and
+     OpenFold, all licensed under Apache License 2.0.
+
+2. Chai-1 (chai-lab)
+   - Path:    Structure/submodules/chai-lab/
+   - Source:  https://github.com/chaidiscovery/chai-lab (commit af596cb)
+   - License: Apache License 2.0 (see Structure/submodules/chai-lab/LICENSE)
+
+3. AlphaFold-derived code (DeepMind Technologies Limited)
+   - Files:   Relax/script/openmm/residue_constants.py
+              Relax/script/openmm/violations_torch.py
+   - Source:  AlphaFold (https://github.com/deepmind/alphafold)
+   - License: Apache License 2.0
+   - Copyright 2021 DeepMind Technologies Limited.
+   - violations_torch.py is a PyTorch port of AlphaFold's structural-violation
+     routines; residue_constants.py is reused as distributed.
+
+4. AlphaFold (alphafold-colabfold) patch
+   - File:    MSA/script/patches/alphafold_templates_kalign_first.patch
+   - Target:  alphafold/data/templates.py from alphafold-colabfold
+              (https://github.com/sokrypton/alphafold), Apache License 2.0
+   - Copyright DeepMind Technologies Limited.
+   - This patch (a diff applied at install time, see install.sh) is a
+     modification by CSSB Thal-Kak (2026): try kalign realignment before
+     falling back to fuzzy regex matching of template sequences.
+
+5. OpenMMDL-derived code (Wolber lab)
+   - Files:   Relax/script/openmm/ff_stack.py
+              Relax/script/openmm/glycoprotein.py
+   - Source:  OpenMMDL (https://github.com/wolberlab/OpenMMDL)
+   - License: MIT License
+   - Copyright (c) 2024 Valerij Talagayev, Yu Chen, Niklas Piet Doering &
+     Leon Obendorf (Wolber lab).
+   - ff_stack.py adapts OpenMMDL's force-field/water assembly; glycoprotein.py
+     follows OpenMMDL's GLYCAM residue/linkage/atom-name tables (reimplemented
+     on OpenMM Topology objects). See each file header for the full MIT notice.
+
+6. ColabFold-derived code (Sergey Ovchinnikov) — template processing
+   - File:    Structure/script/common/process_template.py
+   - Source:  ColabFold (https://github.com/sokrypton/ColabFold),
+              colabfold/batch.py
+   - License: MIT License
+   - Copyright (c) 2021 Sergey Ovchinnikov.
+   - build_hhsearch_db() is derived from ColabFold's mk_hhsearch_db(), and is
+     MODIFIED by CSSB Thal-Kak (2026): per-chain selection via chain_filter;
+     .pdb files parsed directly with PDBParser instead of being converted to
+     mmCIF; mmCIF validation/repair dropped; insertion-coded residues retained
+     rather than raising; multi-model files use model 0 rather than raising;
+     hetero/solvent residues skipped; residue_constants.restype_3to1 replaced
+     with Bio.SeqUtils.seq1; per-entry sequences returned to the caller.
+     See the file header for the full MIT notice.
+   - The remainder of the file — parse_hhr_to_m8_rows() and
+     generate_m8_from_hhsearch() — is original to this work. The latter drives
+     the hhsearch binary using the same documented -i/-d/-o/-maxseq invocation
+     as AlphaFold's HHSearch.query() (Apache License 2.0, Copyright 2021
+     DeepMind Technologies Limited); no AlphaFold source is reproduced.
+
+7. ColabFold-derived code (Sergey Ovchinnikov) — complex-a3m assembly
+   - File:    MSA/cssb_msa/common/assemble.py
+   - Source:  ColabFold (https://github.com/sokrypton/ColabFold),
+              colabfold/batch.py
+   - License: MIT License
+   - Copyright (c) 2021 Sergey Ovchinnikov.
+   - The assembly routines are a Python port of ColabFold's msa_to_str(),
+     pair_msa(), pair_sequences() and pad_sequences(), and reproduce
+     ColabFold's complex-a3m conventions (numeric `>{101+n}` chain ids, the
+     `#L1,L2<TAB>C1,C2` cardinality header, and the homomer short-circuit that
+     drops the paired block). MODIFIED by CSSB Thal-Kak (2026): rewritten
+     against this pipeline's per-chain a3m files and ParsedInputs rather than
+     ColabFold's in-memory structures. See the file header for the full MIT
+     notice.
+
+8. ColabFold search procedure (Sergey Ovchinnikov) — no source reproduced
+   - Files:   MSA/cssb_msa/mmseqs/search_uniref.py
+              MSA/cssb_msa/mmseqs/search_envdb.py
+              MSA/cssb_msa/mmseqs/search_pair.py
+              MSA/cssb_msa/mmseqs/runner.py
+              MSA/cssb_template/engine_mmseqs.py
+   - These modules are original to this work. They drive the `mmseqs` binary
+     (MMseqs2, MIT License, https://github.com/soedinglab/MMseqs2) using the
+     same documented command sequence and flag values as ColabFold's
+     colabfold/mmseqs/search.py (MIT License, Copyright (c) 2021 Sergey
+     Ovchinnikov), so that the alignments this pipeline produces are
+     comparable with ColabFold's. What is shared with ColabFold is the choice
+     and order of mmseqs subcommands, the flag values, and the parameter
+     defaults those values imply; no ColabFold source is reproduced.
+   - engine_mmseqs.py searches the local template database the same way, using
+     the search and convertalis invocation the public ColabFold MSA server
+     emits as `msa.sh`, including its `--format-output` column order.
+   - search_pair.py additionally follows the multimer pairing flag set used by
+     the public ColabFold MSA server, which was determined by inspecting the
+     `pair.sh` the server emits inside its own result tarball. No source from
+     the server implementation (MMseqs2-App, GPL-3.0,
+     https://github.com/soedinglab/MMseqs2-App) is reproduced or redistributed
+     here.
+
+9. ColabFold-derived code (Sergey Ovchinnikov) — MSA coverage plots
+   - File:    MSA/cssb_msa/plot/plotting.py
+   - Source:  ColabFold (https://github.com/sokrypton/ColabFold),
+              colabfold/plot.py
+   - License: MIT License
+   - Copyright (c) 2021 Sergey Ovchinnikov.
+   - plot_msa_coverage() and plot_msa_coverage_multimer() are a Python port of
+     the monomer and multimer branches of ColabFold's plot_msa_v2(), and
+     reproduce its conventions: rows sorted by identity to query, gap cells
+     masked to NaN and scaled by row identity, the rainbow_r [0,1] heatmap with
+     the "Sequence identity to query" colorbar, the black per-position coverage
+     curve, and — for multimers — the grouping of rows by per-chain gap pattern
+     with black chain and group border lines. MODIFIED by CSSB Thal-Kak (2026):
+     both consume ASCII-int8 a3m matrices (gap = ord('-') = 45) built from this
+     pipeline's per-chain a3m files rather than an AlphaFold feature_dict msa
+     array (gap = 21); matplotlib's object-oriented API replaces pyplot global
+     state; a sort_lines option was added; empty input raises rather than
+     producing an empty figure. See the file header for the full MIT notice.
+   - The remainder of the file is original to this work: _expand_to_multimer()
+     (which builds the multimer matrix from per-chain a3m files, a step
+     ColabFold does not have because it reads a prepared feature_dict),
+     plot_neff_curve(), PlotResult, _render_per_db_plots(),
+     _detect_target_and_layout() and plot_cssb_msa().
+
+10. RoseTTAFold filter schedule — no source reproduced
+    - File:    MSA/cssb_msa/common/hhfilter.py
+    - This module is original to this work. It drives the `hhfilter` binary
+      (HH-suite, GPL-3.0-or-later, https://github.com/soedinglab/hh-suite)
+      using the staged coverage schedule RoseTTAFold's MSA preparation uses:
+      `-id 90 -cov 75` first, `-id 90 -cov 50` when that leaves too few
+      sequences. RoseTTAFold is MIT License, Copyright (c) 2021 University of
+      Washington (https://github.com/RosettaCommons/RoseTTAFold). No
+      RoseTTAFold source is reproduced. The depth thresholds that decide
+      between the two stages, and the fallback that returns the unfiltered
+      alignment when both are too aggressive, are ours.
+
+11. AlphaFold search and template-filter procedure (DeepMind Technologies
+    Limited) — no source reproduced
+    - Files:   MSA/cssb_template/engine_hmmer.py
+               MSA/cssb_msa/hhblits/runner.py
+    - These modules are original to this work. They drive the HMMER and
+      HH-suite binaries with the same flag values AlphaFold passes in its own
+      tool wrappers (Apache License 2.0, Copyright 2021 DeepMind Technologies
+      Limited, https://github.com/deepmind/alphafold):
+        * engine_hmmer.py — the hmmsearch flags of alphafold/data/tools/
+          hmmsearch.py (--noali, --F1/--F2/--F3 0.1, -E/--incE/--domE/--incdomE
+          100), and the template prefilter thresholds of alphafold/data/
+          templates.py (max_subsequence_ratio 0.95, min_align_ratio 0.1).
+        * hhblits/runner.py — the HHblits defaults of alphafold/data/tools/
+          hhblits.py (-n 3, -e 0.001, -realign_max 100000, -maxfilt 100000,
+          -min_prefilter_hits 1000, -p 20, -Z 500).
+      No AlphaFold source is reproduced.
+
+================================================================================
+Third-party runtime dependencies (NOT redistributed; installed via pip/conda)
+================================================================================
+
+These packages are imported at runtime and are NOT included in this
+repository. They are listed here for informational purposes only; their
+licenses govern the respective packages, not this work.
+
+   colabfold ............ MIT (trained weights under separate licenses)
+   alphafold-colabfold .. Apache License 2.0
+   boltz ................ MIT
+   esm (EvolutionaryScale / CZ Biohub) .. MIT (model weights may differ)
+   transformers ......... Apache License 2.0
+   openmm ............... LGPL-3.0-or-later (used for structure relaxation)
+   pdbfixer ............. MIT
+   gemmi ................ MPL-2.0
+   rdkit ................ BSD-3-Clause
+   mmseqs2 .............. MIT (sequence search; MSA stage)
+   hh-suite ............. GPL-3.0-or-later (invoked as a binary; MSA stage)
+   hmmer ................ BSD-3-Clause (invoked as a binary; MSA/RNA stages)
+
+NOTE ON MODEL WEIGHTS: Trained model parameters (weights) for the structure
+predictors above are distributed by their respective providers under their own
+terms, which may be more restrictive than the code licenses listed here (e.g.,
+research/non-commercial use). Users are responsible for complying with the
+applicable weight licenses.
+
+The Protenix "protenix-v2" checkpoint is not currently served by its official
+endpoint (which returns HTTP 403 for public requests). When the checkpoint is
+absent, the pipeline downloads it at runtime from a third-party mirror
+(huggingface.co/TMF001/pxdesign-weights) and verifies it against a pinned
+SHA-256 before loading. That mirror is not affiliated with the Protenix
+authors; the SHA-256 check ensures the fetched file is byte-identical to the
+known-good checkpoint and refuses to load anything else. Protenix's code and
+model parameters are both released under the Apache License 2.0 (per the
+Protenix README), so redistribution of the checkpoint is permitted; users may
+substitute an official copy where one is available.
+
+================================================================================
+Reference databases REDISTRIBUTED as downloadable archives
+================================================================================
+
+`install_db.sh` installs the archives listed in install/manifest/databases.tsv.
+Those archives are published by us and are DERIVED databases: each was
+reformatted into an MMseqs2 or HH-suite database, and some were re-clustered.
+They are NOT the original upstream distributions, and figures computed on them
+will not match figures computed on the upstream files.
+
+WHAT LICENSE APPLIES TO WHAT WE PUBLISH. Every archive below derives from a
+single upstream source, so no archive mixes licenses. For each source we name
+the upstream license as the distributor we obtained the data from states it,
+and then, separately, the license we place on the archive we publish, under
+`Our license`. That second field is the one that governs what you may do with
+the file you downloaded from us. Where the upstream license is disputed between
+authorities, the dispute is written out and we follow the more restrictive
+claim for anything we redistribute.
+
+Of the HH-suite archives WE PUBLISH, all but one were converted here from the
+corresponding MMseqs2 database, with their cs219 and hhm profiles computed here.
+The one exception is `envhog`, which is upstream's own HH-suite build; its entry
+says so. (The full BFD in HH-suite format is upstream's too, but we do not
+publish it at all - see the next section.) Several of these archives also cover
+fewer clusters than the MMseqs2 database they were built from; each entry's
+`Changes` field says whether entries were excluded. The tools, flags and
+per-database thresholds behind all of this are in install/README.md, under "How
+these databases were built".
+
+One thing this notice does NOT do is license the output of the pipeline. An
+alignment or a template file produced by a run contains material taken from
+whichever databases you searched, so the Apache-2.0 license on this repository's
+code does not carry over to it - and we make no claim over it either. If you
+intend to redistribute alignments, check the terms of the databases you built
+them from, in particular the two CC BY-SA 4.0 archives and the Logan family,
+which carries no grant at all.
+
+Everything below is provided AS IS, WITHOUT WARRANTY OF ANY KIND, either by the
+upstream provider or by us, and without any representation that it is fit for a
+particular purpose.
+
+--------------------------------------------------------------------------------
+
+1. UniProt UniRef100
+     Produces    mmseqs/uniref100_2026_01, hhblits/uniref100_2026_01
+     Upstream    UniProt UniRef100, release 2026_01
+     Obtained    https://ftp.uniprot.org/pub/databases/uniprot/uniref/
+                 uniref100/uniref100.fasta.gz
+     Source      https://www.uniprot.org/
+     Accessed    2026-04-08 (the transfer ran into 2026-04-09)
+     License     CC BY 4.0   https://creativecommons.org/licenses/by/4.0/
+                 (https://www.uniprot.org/help/license, accessed 2026-08-13)
+     Our license CC BY 4.0 for both archives.
+     Attribution The UniProt Consortium
+     Cite        The UniProt Consortium. UniProt: the Universal Protein
+                 Knowledgebase in 2025. Nucleic Acids Res 53(D1), D609-D617
+                 (2025). doi:10.1093/nar/gkae1010
+     Changes     mmseqs: the upstream sequences were RE-CLUSTERED into an
+                 MMseqs2 expandable-profile database, with every upstream
+                 sequence retained as a cluster member. The `.idx` search index
+                 is not shipped; install_db.sh builds it locally.
+                 hhblits: converted here from that MMseqs2 database. No entries
+                 were excluded.
+
+2. UniRef30 2023_02, as built by the ColabFold project
+     Produces    hhblits/uniref30_2302
+     Upstream    UniRef30 2023_02 - a clustering of UniProt UniRef100 produced
+                 and distributed by the ColabFold project (Steinegger Lab)
+     Obtained    https://opendata.mmseqs.org/colabfold/uniref30_2302.tar.gz
+     Accessed    2026-04-16
+     License     CC BY-SA 4.0   https://creativecommons.org/licenses/by-sa/4.0/
+                 as stated by the authors themselves in the ColabFold paper's
+                 Data availability section: "ColabFold databases are freely
+                 (CC-BY-SA 4.0) available at https://colabfold.mmseqs.com".
+     Our license CC BY-SA 4.0
+                 https://creativecommons.org/licenses/by-sa/4.0/
+     Attribution Milot Mirdita, Martin Steinegger et al. (ColabFold) for the
+                 UniRef30 clustering; The UniProt Consortium for the
+                 underlying sequences
+     Cite        Mirdita M., Schuetze K., Moriwaki Y., Heo L., Ovchinnikov S.,
+                 Steinegger M. ColabFold: making protein folding accessible to
+                 all. Nat Methods 19, 679-682 (2022).
+                 doi:10.1038/s41592-022-01488-1
+                 The UniProt Consortium. UniProt: the Universal Protein
+                 Knowledgebase in 2025. Nucleic Acids Res 53(D1), D609-D617
+                 (2025). doi:10.1093/nar/gkae1010
+     Changes     Converted here into an HH-suite database from the cluster
+                 alignments inside ColabFold's own uniref30_2302 tarball. The
+                 alignments were not expanded, so this build is not equivalent
+                 to a ColabFold search against the same database. No entries
+                 were excluded.
+     Note        The MMseqs2-format UniRef30 is NOT redistributed by us; see
+                 the next section. Only this HH-suite derivative is.
+                 The input is ColabFold's own clustering, not a re-clustering
+                 of UniProt by us, so the ColabFold license claim above is what
+                 governs this archive.
+                 Two other statements about this database say CC BY 4.0 rather
+                 than CC BY-SA 4.0: the download page at
+                 https://colabfold.mmseqs.com/ and the AWS Open Data registry
+                 entry "Steinegger Lab Datasets" (both accessed 2026-08-13).
+                 The AlphaFold README also states CC BY-SA 4.0, for
+                 "Uniref30: v2021_03 (unmodified)". We follow the authors'
+                 paper, which is the stricter and the more authoritative of
+                 the two claims.
+
+3. BFD, reduced subset ("small BFD")
+     Produces    mmseqs/bfd_reduced
+     Upstream    BFD (Big Fantastic Database) by Steinegger M. and Soeding J.;
+                 the reduced subset - the first non-consensus sequence of each
+                 BFD cluster - was derived from it by Google DeepMind and is
+                 distributed as part of the AlphaFold genetic databases
+     Obtained    https://storage.googleapis.com/alphafold-databases/reduced_dbs/
+                 bfd-first_non_consensus_sequences.fasta.gz
+     Accessed    2025-02-04
+     License     CC BY-SA 4.0   https://creativecommons.org/licenses/by-sa/4.0/
+                 This is the notice its distributor attaches to the file we
+                 obtained: the AlphaFold README, under "Third-party database
+                 licenses", for "BFD (modified) ... modified by DeepMind"
+                 (accessed 2026-08-13).
+     Our license CC BY-SA 4.0
+                 https://creativecommons.org/licenses/by-sa/4.0/
+                 We are passing along the license we received, not tightening
+                 one. Recipients of the underlying BFD sequences may also
+                 obtain them from their authors under CC BY 4.0 - see the Note.
+     Attribution Martin Steinegger and Johannes Soeding for BFD; Google
+                 DeepMind for the reduced subset
+     Cite        Steinegger M. & Soeding J. Clustering huge protein sequence
+                 sets in linear time. Nat Commun 9, 2542 (2018).
+                 doi:10.1038/s41467-018-04964-5
+                 For the reduced subset: Jumper J. et al. Highly accurate
+                 protein structure prediction with AlphaFold. Nature 596,
+                 583-589 (2021). doi:10.1038/s41586-021-03819-2
+     Changes     Built here into an MMseqs2 expandable-profile database, which
+                 included re-clustering the sequences. `.idx` not shipped.
+     Note        The full BFD in HH-suite format is NOT redistributed by us;
+                 see the next section.
+                 The original authors distribute BFD themselves, under CC BY
+                 4.0: "All files are available under a Creative Commons
+                 Attribution 4.0 International License"
+                 (https://bfd.mmseqs.com/, accessed 2026-08-13). The
+                 AlphaFold 3 README likewise states CC BY 4.0 for BFD
+                 (modified). Our CC BY-SA 4.0 label follows the notice on the
+                 copy we took and does not purport to withdraw anyone's CC BY
+                 4.0 rights in the underlying BFD.
+
+4. MGnify protein database
+     Produces    mmseqs/mgnify_clusters, hhblits/mgnify_clusters
+     Upstream    MGnify protein database, release 2024_04
+     Source      https://www.ebi.ac.uk/metagenomics/
+     Accessed    2026-03-31
+     License     CC0 1.0   https://creativecommons.org/publicdomain/zero/1.0/
+                 (as stated by EMBL-EBI; the same terms are recorded in the
+                 AlphaFold and AlphaFold 3 database-license notices, accessed
+                 2026-08-13)
+     Our license CC0 1.0 for both archives. We assert no rights of our own.
+     Attribution EMBL-EBI MGnify team
+     Cite        Richardson L. et al. MGnify: the microbiome sequence data
+                 analysis resource in 2023. Nucleic Acids Res 51(D1),
+                 D753-D759 (2023). doi:10.1093/nar/gkac1080
+     Changes     mmseqs: the upstream sequences were RE-CLUSTERED into an
+                 MMseqs2 expandable-profile database. `.idx` not shipped.
+                 hhblits: converted here from that MMseqs2 database, and
+                 entries WERE excluded - clusters holding fewer than 3
+                 sequences are absent, which is most of them. See
+                 install/README.md for the measured coverage.
+
+5. EnVhogDB
+     Produces    mmseqs/envhog_std, hhblits/envhog
+     Upstream    EnVhogDB - Environmental Viral Homologous Groups of proteins
+     Obtained    http://envhog.u-ga.fr/envhog/
+     Accessed    2026-05-13
+     License     CC BY 4.0   https://creativecommons.org/licenses/by/4.0/
+                 The download page we obtained the data from carries NO
+                 license statement of any kind. The same authors deposit the
+                 same dataset on Zenodo under CC BY 4.0, and we rely on that
+                 grant:
+                   10.5281/zenodo.17086476              EnVhogDB raw data
+                   https://zenodo.org/records/17086059  EnVhogDB profiles
+                 both published 2025-09-09, both accessed 2026-08-13.
+     Our license CC BY 4.0 for both archives.
+     Attribution Ruben Perez-Bucio, Francois Enault and Clovis Galiez
+                 (Universite Grenoble Alpes)
+     Cite        Perez-Bucio R., Enault F., Galiez C. EnVhogDB: an extended
+                 view of the viral protein families on Earth through a vast
+                 collection of HMM profiles. Peer Community Journal, Volume 5
+                 (2025), article no. e100. doi:10.24072/pcjournal.627
+                 (The download page still cites the earlier preprint, bioRxiv
+                 2024.06.25.600602.)
+     Changes     mmseqs/envhog_std: built here from the upstream protein FASTA
+                 and flat cluster TSV, re-clustered at the upstream `standard`
+                 level. `.idx` not shipped.
+                 hhblits/envhog: unlike the other HH-suite archives here, this
+                 one is NOT built from an MMseqs2 database - it is upstream's
+                 own HH-suite build, obtained as `enVhog_hhblits.tar.gz`. Its
+                 a3m and cs219 files are passed through unmodified. The only
+                 change is that hhm profiles for shallow alignments were
+                 removed.
+
+6. Logan
+     Produces    mmseqs/logan_human, hhblits/logan_human,
+                 hhblits/logan_nonhuman
+     Upstream    Logan 50%-identity protein catalogue (Logan v1; SRA cutoff
+                 2023-12-10)
+     Obtained    s3://logan-pub/p/
+     Source      https://github.com/IndexThePlanet/Logan
+                 https://registry.opendata.aws/pasteur-logan/
+     Accessed    2026-04-03
+     License     No license instrument has been applied to this data by its
+                 distributor. The AWS Open Data registry names "NCBI Policy
+                 and NIH Genomic Data Sharing Policy", which is a policy
+                 pointer, not a grant. The Logan authors write that they
+                 "release all Logan data into the public-domain" - reproduced
+                 here as a statement of their intent, not as a license.
+     Our license NONE. We grant no rights in this data and make no
+                 representation about your right to use or redistribute it.
+                 We redistribute it subject to the pass-through notice below.
+     Attribution the Logan project and its authors, Chikhi R. et al. (31
+                 authors; see the citation below)
+     Cite        Chikhi R., Lemane T., Loll-Krippleber R., Montoliu-Nerin M.,
+                 Raffestin B., et al. Logan: Planetary-Scale Genome Assembly
+                 Surveys Life's Diversity. bioRxiv 2024.07.30.605881.
+                 doi:10.1101/2024.07.30.605881 (a preprint as of 2026-08-13;
+                 cite the journal version if one has appeared)
+     Changes     mmseqs: built into an MMseqs2 expandable-profile database.
+                 `.idx` not shipped.
+                 hhblits: converted here from that MMseqs2 database, and
+                 entries WERE excluded from both Logan HH-suite archives -
+                 clusters holding fewer than 3 sequences are absent, which is
+                 the great majority. See install/README.md for the measured
+                 coverage.
+     Naming      "human" means the annotated organism of the source SRA
+                 accession is taxid 9606, not that the sequences are of human
+                 origin; upstream warns these accessions also carry
+                 contaminating viral, bacterial and other sequence.
+     Note        logan_nonhuman is published in HH-suite format but NOT in
+                 MMseqs2 format: the MMseqs2 build extracts to 1.4 TB and no
+                 archive is published for it. This asymmetry is deliberate.
+     Upstream pass-through notice, reproduced as required by NCBI:
+                 Logan is derived from the public portion of the NCBI Sequence
+                 Read Archive. Per NCBI policy, NCBI places no restrictions on
+                 the use or distribution of the data contained in its
+                 molecular databases, and does not accept data whose submitter
+                 has requested restrictions on reuse or redistribution.
+                 However, some submitters of the original data (or the country
+                 of origin) may claim patent, copyright, or other intellectual
+                 property rights; because no rights are transferred from
+                 submitters to NCBI, NCBI has none to transfer onward, and
+                 neither NCBI nor we can grant unrestricted permission
+                 concerning use, copying, or distribution.
+
+7. wwPDB / RCSB PDB   (template database)
+     Produces    template/BioMolDB_20260224
+     Upstream    wwPDB / RCSB PDB, snapshot taken 2026-02-24
+     Source      https://www.rcsb.org/
+     Accessed    2026-02-24, which is both the day the snapshot was taken and
+                 the cutoff it represents.
+     License     CC0 1.0   https://creativecommons.org/publicdomain/zero/1.0/
+     Our license CC0 1.0. We assert no rights of our own.
+     Attribution the wwPDB partners
+     Cite        Berman H.M., Westbrook J., Feng Z., Gilliland G., Bhat T.N.,
+                 Weissig H., Shindyalov I.N., Bourne P.E. The Protein Data
+                 Bank. Nucleic Acids Res 28(1), 235-242 (2000).
+                 doi:10.1093/nar/28.1.235
+     Changes     Repackaged as a protein-only seqres FASTA, an MMseqs2 search
+                 database, per-entry gzipped mmCIF files, a chain-metadata
+                 table and a deposition-date table. `.idx` not shipped.
+
+================================================================================
+Reference databases NOT redistributed (downloaded by the install scripts)
+================================================================================
+
+For the databases below, `install_db.sh` downloads from the upstream provider's
+own servers onto your machine and, where noted, builds the searchable database
+locally. This repository, and the archives we publish, contain no copy of that
+data. The licenses named here govern the data as YOU receive it from upstream;
+they are listed so you know what you are agreeing to, not because this work
+redistributes it. A database you build locally is yours, and redistributing it
+is governed by the upstream license.
+
+  UniRef30 2023_02, MMseqs2 format
+    install_db.sh --family mmseqs uniref30_2302
+    Source      https://opendata.mmseqs.org/colabfold/uniref30_2302.tar.gz
+    Built by    the ColabFold project (Steinegger Lab, Seoul National
+                University)
+    License     Disputed; see entry 2 above for the full record. The
+                distributor's own download page states CC BY 4.0.
+    Cite        Mirdita M. et al. ColabFold: making protein folding
+                accessible to all. Nat Methods 19, 679-682 (2022).
+    Underlying data: UniProt UniRef (CC BY 4.0), The UniProt Consortium.
+    Local build The installer converts the archive into a database, builds the
+                index, and overlays a pairing-taxonomy update published at the
+                same location. What you end up with is a derivative you made.
+    Note        The HH-suite derivative of this database IS redistributed by
+                us, under CC BY-SA 4.0. See entry 2 above.
+
+  BFD, full, HH-suite format
+    install_db.sh --family hhblits bfd
+    Source      https://storage.googleapis.com/alphafold-databases/
+                casp14_versions/
+                bfd_metaclust_clu_complete_id30_c90_final_seq.sorted_opt.tar.gz
+    Built by    Steinegger M. and Soeding J.; mirrored by Google DeepMind,
+                who host the identical file
+    License     Disputed; see entry 3 above for the full record. The original
+                authors' own distribution at https://bfd.mmseqs.com/ states
+                CC BY 4.0; the AlphaFold README states CC BY-SA 4.0 for the
+                mirror.
+    Cite        Steinegger M. & Soeding J. Clustering huge protein sequence
+                sets in linear time. Nat Commun 9, 2542 (2018).
+    Local build Unpacked and renamed only; no database is built.
+    Note        The reduced subset of BFD IS redistributed by us in MMseqs2
+                format, under CC BY-SA 4.0. See entry 3 above.
+
+  Rfam
+    install_db.sh --family rna rfam
+    Source      https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/
+                Rfam.fa.gz
+    License     CC0 1.0   https://creativecommons.org/publicdomain/zero/1.0/
+    Attribution EMBL-EBI and the Rfam consortium
+    Cite        Ontiveros-Palacios N., Cooke E., Nawrocki E.P., Triebel S.,
+                Marz M., Rivas E., Griffiths-Jones S., Petrov A.I., Bateman A.,
+                Sweeney B. Rfam 15: RNA families database in 2025. Nucleic
+                Acids Res 53(D1), D258-D267 (2025). doi:10.1093/nar/gkae1023
+    Local build The installer clusters the sequences and builds search indexes,
+                so what you end up with is a derivative you made. The exact
+                thresholds are in install/README.md.
+    Note        The script tracks the CURRENT release, so the version you get
+                is the version published on the day you run it.
+
+  RNAcentral
+    install_db.sh --family rna rnacentral
+    Source      https://ftp.ebi.ac.uk/pub/databases/RNAcentral/
+                current_release/sequences/rnacentral_active.fasta.gz
+    License     CC0 1.0   https://creativecommons.org/publicdomain/zero/1.0/
+    Attribution The RNAcentral Consortium
+    Cite        The RNAcentral Consortium. RNAcentral 2021: secondary
+                structure integration, improved sequence search and new member
+                databases. Nucleic Acids Res 49(D1), D212-D220 (2021).
+                doi:10.1093/nar/gkaa921
+                A 2026 update is in press: RNAcentral in 2026: genes and
+                literature integration. doi:10.1093/nar/gkaf1329
+    Local build As for Rfam: clustered and indexed locally, so the result is a
+                derivative you made.
+    Note        RNAcentral aggregates sequences from dozens of member
+                databases and releases the aggregate under CC0; the terms of
+                individual member databases are not restated here. Tracks the
+                current release, as above.

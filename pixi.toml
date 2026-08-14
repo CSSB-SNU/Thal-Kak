@@ -1,0 +1,116 @@
+# pixi manifest for the thalkak env (mirrors environment.yml + install.sh).
+# The alphafold site-packages patch runs as a [task].
+[workspace]
+name = "thalkak"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+# ---- conda deps ----
+# System tools + the scientific stack. The scientific packages (numpy/scipy/...)
+# live here rather than in [pypi-dependencies] so the conda solve and the pypi
+# solve agree on one version (conda deps like rdkit/openmm pull a conda numpy/
+# scipy, which otherwise conflicts with a pypi pin).
+[dependencies]
+python = "3.12.*"
+# Ship an env-local pip so it shadows the system python's pip.
+pip = "*"
+hmmer = "==3.4.0"
+# bioconda hmmer links libopenblas.so.0 directly (RNA MSA needs it) but declares
+# only gsl, so request the library. Do NOT pin the BLAS variant
+# (libblas=*=*openblas): ambertools -> mdtraj -> pytables -> numexpr needs libblas
+# *mkl, so pinning openblas makes openff-toolkit unsolvable. MKL and libopenblas
+# coexist here. (matches environment.yml)
+libopenblas = "*"
+openmm = "==8.4.0"
+pdbfixer = "==1.12.0"
+cuda-version = "12.6.*"
+rdkit = "==2024.09.6"
+kalign2 = "==2.04"
+hhsuite = "==3.3.0"
+mmseqs2 = "==18.8cc5c"
+numpy = "2.4.4.*"
+scipy = "1.17.1.*"
+numba = ">=0.61"
+llvmlite = ">=0.44"
+pandas = "2.*"
+matplotlib-base = ">=3.10"
+importlib-metadata = ">=8.6.1,<9"  # colabfold 1.6.1 needs <9
+# openmm-relax ligand parametrization (GAFF/SMIRNOFF). Pulls the
+# openff -> mdtraj -> pytables -> numexpr chain, which resolves for py3.12 +
+# numpy2 only via the MKL builds (see the libopenblas note above on BLAS).
+ambertools = "24.8.*"
+openff-toolkit = "==0.16.10"
+openmmforcefields = "==0.15.1"
+
+# torch cu126 wheels from the pytorch index (matches the cuequivariance ABI).
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu126"]
+# The pytorch index also carries old builds of common packages (tqdm, etc.);
+# consider every index so pinned PyPI versions aren't shadowed by it.
+index-strategy = "unsafe-best-match"
+# Mirror `pip install --no-deps` for boltz/chai/protenix: their pyproject pins
+# conflict with the unified env (chai numpy~=1.21/gemmi~=0.6.3; protenix pins a
+# whole divergent set). Override each so uv accepts the env's chosen versions.
+dependency-overrides = { numpy = ">=2", gemmi = ">=0.7", tqdm = ">=4.67", matplotlib = ">=3.10", rdkit = ">=2024", biopython = "==1.84", biotite = "==1.6.0", modelcif = "==1.2", wandb = "==0.18.7", pandas = ">=2", protobuf = "==6.31.1", numba = ">=0.61", llvmlite = ">=0.44", scipy = ">=1.16", dm-tree = ">=0.1.8", scikit-learn = ">=1.6", ipywidgets = ">=8.1", pyyaml = ">=6.0", requests = ">=2.32" }
+
+# ---- pip deps (scientific stack moved to [dependencies] above) ----
+[pypi-dependencies]
+torch = "==2.7.1"
+torchvision = "==0.22.1"
+torchaudio = "==2.7.1"
+biopython = "==1.84"
+gemmi = "==0.7.5"
+pytorch-lightning = "==2.5.0"
+fairscale = "==0.4.13"
+hydra-core = "==1.3.2"
+mashumaro = "==3.14"
+modelcif = "==1.2"
+chembl_structure_pipeline = "==1.2.2"
+dm-tree = "==0.1.10"
+einops = "==0.8.0"
+einx = "==0.3.0"
+wandb = "==0.18.7"
+esm = { git = "https://github.com/Biohub/esm.git", rev = "cf002f1d2fb9220a0918fc8c5ea4e3b56d28fbaf" }
+transformers = { git = "https://github.com/Biohub/transformers.git", rev = "ef32577f55da19a4989cd7b22e004dc43a4998cb" }
+accelerate = "==1.13.0"
+tokenizers = "==0.22.2"
+huggingface_hub = "==0.36.2"
+safetensors = "==0.8.0"
+biotite = "==1.6.0"
+antipickle = "==0.2.0"
+beartype = "==0.22.9"
+jaxtyping = "==0.3.10"
+pandera = "==0.31.1"
+tmtools = "==0.3.0"
+typer = "==0.26.7"
+pyarrow = "==24.0.0"
+gcsfs = "==2026.5.0"
+s3fs = "==2026.3.0"
+cuequivariance = "==0.8.0"
+cuequivariance-torch = "==0.8.0"
+cuequivariance-ops-torch-cu12 = "==0.8.0"
+opt_einsum = "==3.4.0"
+ml_collections = "==1.1.0"
+py3Dmol = "==2.5.2"
+pdbeccdutils = "==1.0.0"
+scikit-learn-extra = "==0.3.0"
+deepspeed = "==0.17.5"
+optree = "==0.17.0"
+icecream = "==2.1.7"
+ipdb = "==0.13.13"
+colabfold = { version = "==1.6.1", extras = ["alphafold"] }
+absl-py = "==1.4.0"
+# Installed --no-deps in install.sh; their pyproject pins conflict with the
+# unified env and are relaxed via dependency-overrides above.
+boltz = "==2.2.1"
+chai_lab = { path = "Structure/submodules/chai-lab", editable = true }
+protenix = { path = "Structure/submodules/protenix", editable = true }
+thalkak = { path = ".", editable = true }
+
+# ---- post-install steps (install.sh steps not expressible as dependencies) ----
+# Run after `pixi install`:  pixi run postinstall
+[tasks]
+# Patch alphafold-colabfold templates.py (kalign realignment first). -N makes
+# it a no-op if already applied.
+patch-alphafold = "patch -p1 -N -d $CONDA_PREFIX/lib/python3.12/site-packages < MSA/script/patches/alphafold_templates_kalign_first.patch || true"
+postinstall = { depends-on = ["patch-alphafold"] }

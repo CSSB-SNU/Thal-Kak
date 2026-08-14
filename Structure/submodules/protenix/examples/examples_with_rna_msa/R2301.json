@@ -1,0 +1,16 @@
+[
+    {
+        "sequences": [
+            {
+                "rnaSequence": {
+                    "sequence": "GAGCCCGUUAGAUUUUAUGUGCGAGCUUUCUUGCCGCCUUCUUGCUCGUGUGGUAGGACCGUUUCUUUGGCGGCUUCUUCGGUCCUGUUCGGGCUC",
+                    "count": 1,
+                    "unpairedMsaPath": "/home/yjkim/git/Protenix/examples/examples_with_rna_msa/R2301/R2301.a3m"
+                }
+            }
+        ],
+        "modelSeeds": [1,2,3,4,5],
+        "assembly_id": "1",
+        "name": "R2301_recent"
+    }
+]

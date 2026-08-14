@@ -1,0 +1,6 @@
+# Installed with `pip install --no-deps` (see install.sh).
+# Their pyproject pins conflict with the unified env (numpy<2 etc.);
+# their runtime deps are listed in environment.yml's pip block.
+boltz==2.2.1
+-e Structure/submodules/chai-lab
+-e Structure/submodules/protenix

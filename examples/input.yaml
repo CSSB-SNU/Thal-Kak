@@ -1,0 +1,34 @@
+# Thal-Kak full-mode input (tutorial).
+#   thalkak full --input examples/input.yaml
+# Field docs:  thalkak full -h
+
+Method:
+  jobname: T1201        # names outputs and the generated FASTA
+  msa: colab            # colab | mmseqs_cssb | hhblits_cssb | mmseqs_hhblits_cssb
+  structure: boltz2     # the only field that may be a list, e.g. [boltz2, chai1, protenix_v2, esmfold2] (run in order)
+  relax: openmm         # none | openmm
+  top5_metric: ranking_score  # top-5 ranking: ranking_score | ptm | iptm | plddt (default ranking_score)
+  n_seed: 5             # optional (default 5)
+  seed_start: 1         # optional (default 1)
+  # msa_config: examples/msa_config.combined.yaml   # optional (cssb msa modes only)
+  # model_config: examples/model_config.yaml        # optional (combined, keyed by model)
+  # relax_config: examples/openmm.yaml              # optional
+  # base_dir: runs/T1201                            # optional (default: this file's dir)
+
+Entity:
+  # `type` is required. protein/dna/rna use `seq`; ligand uses `smiles` or `ccd`.
+  # `copy` = number of chains (builds the stoichiometry).
+  - type: protein
+    seq: ETGCNKALCASDVSKCLIQELCQCRPGEGNCSCCKECMLCLGALWDECCDCVGMCNPRNYSDTPPTSKSTVEELHEPIPSLFRALTEGDTQLNWNIVSFPVAEELSHHENLVSFLETVNQPHHQNVSVPSNNVHAPYSSDKEHMCTVVYFDDCMSIHQCKISCESMGASKYRWFHNACCECIGPECIDYGSKTVKCMNCMFGTKHHHHHH
+    copy: 1
+
+  # Add more entities as needed — examples (commented):
+  # - type: dna
+  #   seq: GATCGATC
+  #   copy: 1
+  # - type: ligand
+  #   smiles: C1CCCCC1
+  #   copy: 1
+  # - type: ligand
+  #   ccd: ATP
+  #   copy: 1

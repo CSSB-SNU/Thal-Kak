@@ -1,0 +1,81 @@
+# Patch for alphafold-colabfold (https://github.com/sokrypton/alphafold)
+# Original: Apache License 2.0, Copyright DeepMind Technologies Limited
+# Modifications: CSSB Thal-Kak (2026)
+# Purpose: try kalign realignment before falling back to fuzzy regex match
+#          when the template sequence is not found exactly in the PDB chain.
+#
+# Apply (run inside the env's site-packages dir):
+#   patch -p1 -d $CONDA_PREFIX/lib/python<X.Y>/site-packages \
+#       < MSA/script/patches/alphafold_templates_kalign_first.patch
+#
+--- a/alphafold/data/templates.py
++++ b/alphafold/data/templates.py
+@@ -265,17 +265,6 @@
+       mapping_offset = chain_sequence.find(template_sequence)
+       return chain_sequence, chain_id, mapping_offset
+ 
+-  # Return a chain sequence that fuzzy matches (X = wildcard) the template.
+-  # Make parentheses unnamed groups (?:_) to avoid the 100 named groups limit.
+-  regex = ['.' if aa == 'X' else '(?:%s|X)' % aa for aa in template_sequence]
+-  regex = re.compile(''.join(regex))
+-  for chain_id, chain_sequence in mmcif_object.chain_to_seqres.items():
+-    match = re.search(regex, chain_sequence)
+-    if match:
+-      logging.info('Found a fuzzy sequence-only match %s_%s.', pdb_id, chain_id)
+-      mapping_offset = match.start()
+-      return chain_sequence, chain_id, mapping_offset
+-
+   # No hits, raise an error.
+   raise SequenceNotInTemplateError(
+       'Could not find the template sequence in %s_%s. Template sequence: %s, '
+@@ -534,19 +523,37 @@
+         f'The exact sequence {template_sequence} was not found in '
+         f'{pdb_id}_{chain_id}. Realigning the template to the actual sequence.')
+     logging.warning(warning)
+-    # This throws an exception if it fails to realign the hit.
+-    seqres, mapping = _realign_pdb_template_to_query(
+-        old_template_sequence=template_sequence,
+-        template_chain_id=template_chain_id,
+-        mmcif_object=mmcif_object,
+-        old_mapping=mapping,
+-        kalign_binary_path=kalign_binary_path)
+-    logging.info('Sequence in %s_%s: %s successfully realigned to %s',
+-                 pdb_id, chain_id, template_sequence, seqres)
+-    # The template sequence changed.
+-    template_sequence = seqres
+-    # No mapping offset, the query is aligned to the actual sequence.
+-    mapping_offset = 0
++    try:
++      seqres, mapping = _realign_pdb_template_to_query(
++          old_template_sequence=template_sequence,
++          template_chain_id=template_chain_id,
++          mmcif_object=mmcif_object,
++          old_mapping=mapping,
++          kalign_binary_path=kalign_binary_path)
++      logging.info('Sequence in %s_%s: %s successfully realigned to %s',
++                   pdb_id, chain_id, template_sequence, seqres)
++      # The template sequence changed.
++      template_sequence = seqres
++      # No mapping offset, the query is aligned to the actual sequence.
++      mapping_offset = 0
++    except QueryToTemplateAlignError:
++      # kalign realignment failed; fall back to a fuzzy regex match
++      # (X = wildcard). Parentheses are unnamed groups (?:_) to avoid the
++      # 100 named groups limit.
++      pdb_id = mmcif_object.file_id
++      regex = ['.' if aa == 'X' else '(?:%s|X)' % aa for aa in template_sequence]
++      regex = re.compile(''.join(regex))
++      for chain_id, chain_sequence in mmcif_object.chain_to_seqres.items():
++        match = re.search(regex, chain_sequence)
++        if match:
++          logging.info('Found a fuzzy sequence-only match %s_%s.', pdb_id, chain_id)
++          mapping_offset = match.start()
++          seqres = chain_sequence
++          break
++      else:
++        raise SequenceNotInTemplateError(
++            'Could not find a fuzzy match for template sequence in %s. '
++            'Template sequence: %s' % (pdb_id, template_sequence))
+
+   try:
+     # Essentially set to infinity - we don't want to reject templates unless

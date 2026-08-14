@@ -1,0 +1,33 @@
+# pLDDT cutoff: residues above use hires restraint params, below use lowres.
+lddt_cut: 60.0
+
+# Flat-bottom harmonic spring constant (kcal/mol/A^2) and tolerance (A) for the
+# high-pLDDT (hires) region.
+k_hires: 10.0
+tol_hires: 0.5
+
+# ... and for the low-pLDDT (lowres) region.
+k_lowres: 5.0
+tol_lowres: 2.0
+
+# Atoms to restrain: non_hydrogen | backbone | c_alpha.
+# non_hydrogen also covers ligand/glycan/ion heavy atoms automatically.
+rst_set: non_hydrogen
+
+# Implicit solvent model: obc2 | gbn2 | none. When the system contains atom
+# types the GB model has no radii for (common with GLYCAM/GAFF), relaxation
+# automatically falls back to vacuum and tags the output accordingly.
+implicit_solvent: obc2
+
+# L-BFGS max iterations per minimization pass.
+max_iterations: 2000
+
+# Minimizer force tolerance in kcal/mol/A (-> minimizeEnergy tolerance =
+# tolerance*ENERGY/LENGTH). 0.239 kcal/mol/A = 10 kJ/mol/nm = OpenMM's default.
+tolerance: 0.239
+
+# Violation-informed outer iterations (AF2 default 20, ColabFold 3).
+max_outer_iterations: 3
+
+# OpenMM platform: CUDA | CPU | OpenCL | Reference.
+platform: CUDA

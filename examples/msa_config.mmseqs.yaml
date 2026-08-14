@@ -1,0 +1,103 @@
+# MSA config for `--msa mmseqs_cssb` (local mmseqs2 expandable-profile search).
+# Self-contained: engine knobs (dbs / dedup / search) + caps + template + plot.
+# This is the default for `--msa mmseqs_cssb`; swap for one run with
+# `--msa_config <path>` (thalkak msa|full, or python -m MSA.msa_generation).
+
+# The FIRST entry must stay `uniref30_2302`: it is the Stage A profile DB and the
+# multimer pairing DB, not just the first search target. Reorder the rest freely,
+# add or drop entries freely; putting another key first is refused at startup.
+dbs:
+  - uniref30_2302
+  - uniref100_2026_01
+  - bfd_reduced
+  - mgnify_clusters
+  - logan_human
+  - envhog_std
+
+# Cross-DB hit dedup of the merged per-chain a3m.
+# `merge.mode: cap_walk` only. The default `leveled` always dedups on raw_seq and
+# never reads this, so editing it there changes nothing and does not rebuild;
+# the builder says so once at startup.
+dedup:
+  mode: raw_seq    # none | raw_seq | dedup_key
+  # none      = strip only repeated query rows (colabfold-canonical, no hit dedup)
+  # raw_seq   = collapse hits with identical literal aa-seq (gaps removed +
+  #             insertions uppercased) regardless of alignment.  [default]
+  # dedup_key = collapse hits with identical insert-stripped (aligned-column)
+  #             representation = the AF3 / hhblits dedup key.
+
+# ColabFold-canonical search params. filter=true
+# silently overrides align_eval/qsc/max_accept to 10/0.8/100000 inside
+# search_uniref + search_envdb (upstream footgun-by-design). The 7 keys
+# num_iterations/max_seqs/initial_eval/expand_max_seq_id/alt_ali/
+# filter_min_enable/pair_align_eval are NOT subject to that override.
+search:
+  num_iterations:    3       # mmseqs --num-iterations (iterative search)
+  max_seqs:          10000   # mmseqs --max-seqs (per-query candidate cap)
+  initial_eval:      0.1     # mmseqs -e at iterative search step
+  expand_max_seq_id: 0.95    # mmseqs --max-seq-id (all expand-equivalent sites)
+  alt_ali:           10      # mmseqs --alt-ali (uniref + envdb align step)
+  filter_min_enable: 1000    # mmseqs --filter-min-enable (uniref MSA filter gate)
+  pair_align_eval:   0.001   # search_pair strict align -e (differs from align_eval)
+  sensitivity:  8.0
+  filter:       true
+  diff:         3000
+  db_load_mode: 2            # 2=mmap (.idx required), 0=auto fallback
+  # The next 3 are effective only when filter=false:
+  align_eval:   10
+  qsc:          -20.0
+  max_accept:   1000000
+  expand_eval:  .inf         # YAML float infinity
+
+# Unpaired merge strategy (same block in all three cssb config files).
+#   leveled  = group each chain's per-DB a3ms by DB kind (uniref / env), raw_seq
+#              dedup inside the group, run staged hhfilter on it, then stack
+#              uniref-on-top / env-below. Depth is bounded by hhfilter rather than
+#              by a per-DB head-N, so `caps.per_kind` is NOT applied and
+#              `caps.total_max` acts only as an outer cap AFTER filtering.
+#              Requires `hhfilter` on PATH (from `hhsuite` in environment.yml);
+#              missing binary fails at startup, not mid-run.
+#   cap_walk = legacy: head-cap each per-DB a3m to `caps.per_kind` walking
+#              `caps.priority`, raw_seq dedup, stop at `caps.total_max`.
+# `mode` and every hhfilter knob are part of the re-run skip key — changing one
+# rebuilds `msa_dir` rather than reusing a differently-merged a3m.
+merge:
+  mode: leveled              # leveled | cap_walk
+  hhfilter:                  # RoseTTAFold coverage schedule + min-keep guard:
+    id:           90         #   -id 90 -cov 75 first; if that leaves fewer than
+    cov_hi:       75         #   depth_thresh seqs retry at -cov 50; if THAT leaves
+    cov_lo:       50         #   fewer than min_keep, keep the unfiltered group.
+    depth_thresh: 2000
+    min_keep:     100
+
+# Hit caps + total MSA depth, in a3m RECORDS (query row 0 included).
+# Under the default `merge.mode: leveled` only `paired_max` and `total_max` are
+# read; `per_kind` and `priority` are cap_walk-only and are neither validated nor
+# compared for re-run reuse there, so you can add a DB to `dbs` above without
+# touching `priority`.
+caps:
+  per_kind:   { uniref: 10000, env: 5000 }   # cap_walk only: head-N per DB
+  paired_max: 8192                           # paired record cap N (all chains, same first N)
+  total_max:  16384                          # per-chain total records; unpaired budget = total_max - N
+  priority:   [uniref30_2302, uniref100_2026_01, bfd_reduced, bfd, mgnify_clusters, envhog_std, envhog, logan_human, logan_nonhuman]
+
+# Local template search (BioMolDB). engine=auto -> mmseqs (vs BioMolDB) for this
+# mode.
+template:
+  enable:    true            # off -> skip template search entirely
+  engine:    auto            # auto (mmseqs_cssb -> mmseqs) | mmseqs | hmmer
+  query_a3m: uniref30        # hmmer hmmbuild seed; ignored by the mmseqs engine
+  # Cutoff on the PDB entry's initial RELEASE date, not its deposition date --
+  # an embargoed entry is deposited long before it is public, so filtering on
+  # deposition would admit structures that were not available at the cutoff.
+  # Release dates come from the snapshot's release_dates.tsv; an entry missing
+  # from it falls back to deposition_date. Both engines behave this way.
+  max_date:  "3000-01-01"    # 3000-01-01 = no cutoff
+  max_hits:  20              # per-chain template cap
+
+# MSA coverage + Neff plots.
+plot:
+  enable:             true
+  per_db_enable:      true
+  identity_threshold: 0.62
+  subsample_cap:      10000  # 0 / null -> disable subsampling

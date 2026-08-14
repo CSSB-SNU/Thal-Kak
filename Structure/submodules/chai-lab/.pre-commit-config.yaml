@@ -1,0 +1,39 @@
+---
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.6.3
+    hooks:
+      # Run the linter.
+      - id: ruff
+      # Run the formatter.
+      - id: ruff-format
+
+  - repo: https://github.com/johannsdg/pre-commit-license-headers
+    rev: v0.1.0
+    hooks:
+      - id: check-license-headers
+        args:
+          - "--template"
+          - |
+            Copyright (c) [YEARS] Chai Discovery, Inc.
+            Licensed under the Apache License, Version 2.0.
+            See the LICENSE file for details.
+          # - "--owner=The Pre-Commit License Headers Authors"
+        include: .*py
+        exclude: |
+          (?x)^(
+            examples/.*|
+            .pre-commit-config.yaml|
+            .pre-commit-hooks.yaml|
+            .github/workflows/.*yml|
+            .github/dependabot.yml|
+            .github/pull_request_template.md|
+            Dockerfile.chailab|
+            LICENSE|
+            README.md|
+            requirements.in|
+            ruff.toml|
+            chai_lab/data/residue_constants.py|
+            pyproject.toml
+          )$

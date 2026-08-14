@@ -1,0 +1,90 @@
+# MSA config for `--msa hhblits_cssb` (HHblits UniRef + envDB pipeline).
+# Self-contained: engine knobs + pair_search + caps + template + plot.
+# Default for `--msa hhblits_cssb`; swap for one run with `--msa_config <path>`.
+
+# First entry = Phase 2 primary UniRef DB; remaining = Phase 3 env DBs seeded by
+# the Phase 2 a3m. uniref30 is included as an env DB so the clustered UniRef
+# profile layers on top of the uniref100 primary. Env-stage filter is
+# kind-agnostic (kind=="uniref" DBs are valid Phase-3 entries when they have a
+# hhblits_db_stem). `bfd` (not `bfd_reduced`) since hhblits reads full member MSAs.
+dbs:
+  - uniref100_2026_01      # Phase 2 — primary UniRef profile
+  - uniref30_2302          # Phase 3 — env DB (clustered UniRef)
+  - bfd                    # Phase 3 — env DB
+  - mgnify_clusters        # Phase 3 — env DB
+  - logan_human            # Phase 3 — env DB
+  - logan_nonhuman         # Phase 3 — env DB
+  - envhog                 # Phase 3 — env DB
+n_iter_uniref: 3           # hhblits -n (Stage A UniRef)
+n_iter_env:    3           # hhblits -n (Stage C env DBs)
+evalue:        0.001       # hhblits -e (both stages)
+
+# Multimer pairing reuses the mmseqs search_pair pipeline (mmseqs search_pair on
+# the uniref30 MMSEQS DB -> expandaln recovers per-species members -> deep paired
+# MSA). The uniref100 hhblits DB strips taxonomy so it CANNOT pair; the uniref30
+# mmseqs DB carries NCBI taxonomy + cluster members.
+pair_db: uniref30_2302
+# search_pair params — the 7 keys search_pair_uniref30 consumes. (Previously
+# inherited from mmseqs_cssb.search via a fallback; now explicit + tunable here.)
+pair_search:
+  num_iterations:    3
+  max_seqs:          10000
+  initial_eval:      0.1
+  expand_max_seq_id: 0.95
+  pair_align_eval:   0.001
+  sensitivity:       8.0
+  db_load_mode:      2
+
+# Unpaired merge strategy (same block in all three cssb config files).
+#   leveled  = group each chain's per-DB a3ms by DB kind (uniref / env), raw_seq
+#              dedup inside the group, staged hhfilter, then stack uniref-on-top /
+#              env-below. Depth is bounded by hhfilter rather than a per-DB head-N,
+#              so `caps.per_kind` is NOT applied and `caps.total_max` acts only as
+#              an outer cap AFTER filtering.
+#              ON THIS ENGINE the uniref group is `dbs[0]` ALONE (the Phase-2
+#              profile DB, uniref100 by default). uniref30 sits in Phase 3 and is
+#              therefore an env DB here — which is deliberate and differs from
+#              db_registry's kind for the same key.
+#   cap_walk = legacy: head-cap each per-DB a3m to `caps.per_kind` walking
+#              `caps.priority`, raw_seq dedup, stop at `caps.total_max`.
+# `mode` and every hhfilter knob are part of the re-run skip key.
+merge:
+  mode: leveled              # leveled | cap_walk
+  hhfilter:
+    id:           90
+    cov_hi:       75
+    cov_lo:       50
+    depth_thresh: 2000
+    min_keep:     100
+
+# Hit caps + total MSA depth, in a3m RECORDS (query row 0 included).
+# Under the default `merge.mode: leveled` only `paired_max` and `total_max` are
+# read; `per_kind` and `priority` are cap_walk-only and are neither validated nor
+# compared for re-run reuse there, so you can add a DB to `dbs` above without
+# touching `priority`.
+caps:
+  per_kind:   { uniref: 10000, env: 5000 }   # cap_walk only: head-N per DB
+  paired_max: 8192
+  total_max:  16384
+  priority:   [uniref30_2302, uniref100_2026_01, bfd_reduced, bfd, mgnify_clusters, envhog, logan_human, logan_nonhuman]
+
+# Local template search. engine=auto -> hmmer (local hmmbuild+hmmsearch) for this
+# mode. query_a3m=uniref100 uses the hhblits UniRef100 profile as the hmmbuild
+# seed (AF3 seeds this step with UniRef90).
+template:
+  enable:    true
+  engine:    auto            # auto (hhblits_cssb -> hmmer) | mmseqs | hmmer
+  query_a3m: uniref100
+  # Cutoff on the PDB entry's initial RELEASE date, not its deposition date --
+  # an embargoed entry is deposited long before it is public, so filtering on
+  # deposition would admit structures that were not available at the cutoff.
+  # Release dates come from the snapshot's release_dates.tsv; an entry missing
+  # from it falls back to deposition_date. Both engines behave this way.
+  max_date:  "3000-01-01"    # 3000-01-01 = no cutoff
+  max_hits:  20
+
+plot:
+  enable:             true
+  per_db_enable:      true
+  identity_threshold: 0.62
+  subsample_cap:      10000

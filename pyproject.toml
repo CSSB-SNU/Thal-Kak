@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thalkak"
+version = "0.1.0"
+description = "Thal-Kak: a unified protein/nucleic-acid structure prediction pipeline"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+py-modules = ["thalkak"]
+
+[tool.setuptools.packages.find]
+include = ["MSA*", "Structure*", "Relax*"]
+exclude = ["*.submodules*"]
+
+[project.scripts]
+thalkak = "thalkak:cli"

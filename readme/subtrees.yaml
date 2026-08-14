@@ -1,0 +1,18 @@
+# Subtree origins for the vendored models under Structure/submodules/.
+# Each directory was pulled in with
+#   git subtree add --prefix=<path> <url> <commit> --squash
+# and is now part of the working tree.
+#
+# Updating one of these:
+#   git subtree pull --prefix=<path> <url> <new_commit_or_ref> --squash
+# then bump the corresponding `commit` field below.
+
+subtrees:
+  - path: Structure/submodules/chai-lab
+    url: https://github.com/chaidiscovery/chai-lab.git
+    commit: af596cbc075a1fce368cec0ab5f31be1090ca7e2
+
+  - path: Structure/submodules/protenix
+    url: https://github.com/bytedance/Protenix.git
+    commit: c3bfc365b3e1341a11935eddfe7bfdc308092147
+    patches: local modifications reapplied on top (see git log)
