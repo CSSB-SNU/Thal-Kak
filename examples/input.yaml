@@ -5,7 +5,7 @@
 Method:
   jobname: T1201        # names outputs and the generated FASTA
   msa: colab            # colab | mmseqs_cssb | hhblits_cssb | mmseqs_hhblits_cssb
-  structure: boltz2     # the only field that may be a list, e.g. [boltz2, chai1, protenix_v2, esmfold2] (run in order)
+  structure: [boltz2, chai1, protenix_v1, protenix_v2, esmfold2]   # the only field that may be a list (run in order)
   relax: openmm         # none | openmm
   top5_metric: ranking_score  # top-5 ranking: ranking_score | ptm | iptm | plddt (default ranking_score)
   n_seed: 5             # optional (default 5)
@@ -13,7 +13,7 @@ Method:
   # msa_config: examples/msa_config.combined.yaml   # optional (cssb msa modes only)
   # model_config: examples/model_config.yaml        # optional (combined, keyed by model)
   # relax_config: examples/openmm.yaml              # optional
-  # base_dir: runs/T1201                            # optional (default: this file's dir)
+  base_dir: outputs/T1201                           # optional, relative to the working directory (default: this file's dir)
 
 Entity:
   # `type` is required. protein/dna/rna use `seq`; ligand uses `smiles` or `ccd`.
