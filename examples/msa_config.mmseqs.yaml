@@ -1,6 +1,6 @@
-# MSA config for `--msa mmseqs_cssb` (local mmseqs2 expandable-profile search).
+# MSA config for `--msa mmseqs_local` (local mmseqs2 expandable-profile search).
 # Self-contained: engine knobs (dbs / dedup / search) + caps + template + plot.
-# This is the default for `--msa mmseqs_cssb`; swap for one run with
+# This is the default for `--msa mmseqs_local`; swap for one run with
 # `--msa_config <path>` (thalkak msa|full, or python -m MSA.msa_generation).
 
 # The FIRST entry must stay `uniref30_2302`: it is the Stage A profile DB and the
@@ -49,7 +49,7 @@ search:
   max_accept:   1000000
   expand_eval:  .inf         # YAML float infinity
 
-# Unpaired merge strategy (same block in all three cssb config files).
+# Unpaired merge strategy (same block in all three local config files).
 #   leveled  = group each chain's per-DB a3ms by DB kind (uniref / env), raw_seq
 #              dedup inside the group, run staged hhfilter on it, then stack
 #              uniref-on-top / env-below. Depth is bounded by hhfilter rather than
@@ -85,7 +85,7 @@ caps:
 # mode.
 template:
   enable:    true            # off -> skip template search entirely
-  engine:    auto            # auto (mmseqs_cssb -> mmseqs) | mmseqs | hmmer
+  engine:    auto            # auto (mmseqs_local -> mmseqs) | mmseqs | hmmer
   query_a3m: uniref30        # hmmer hmmbuild seed; ignored by the mmseqs engine
   # Cutoff on the PDB entry's initial RELEASE date, not its deposition date --
   # an embargoed entry is deposited long before it is public, so filtering on

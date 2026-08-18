@@ -14,9 +14,9 @@ FASTA + stoi  ──►  [MSA]  ──►  data yaml  ──►  Structure  ─�
 |--------|---------|--------------|
 | `colab` | ColabFold (`colabfold_search`) via the configured env | MMseqs2 search against ColabFold DBs, then AF2 template lookup; the combined a3m is split per chain into paired / unpaired files |
 | `custom` | none — your own alignment | No search. Splits the a3m given by `--a3m_path` per chain, exactly as the `colab` output is split |
-| `mmseqs_cssb` | local MMseqs2 | Local MMseqs2 search against the databases under `db/` (no remote server) |
-| `hhblits_cssb` | local HHblits | Local HHblits search against the databases under `db/` |
-| `mmseqs_hhblits_cssb` | local MMseqs2 + HHblits | Runs both engines and merges the alignments |
+| `mmseqs_local` | local MMseqs2 | Local MMseqs2 search against the databases under `db/` (no remote server) |
+| `hhblits_local` | local HHblits | Local HHblits search against the databases under `db/` |
+| `mmseqs_hhblits_local` | local MMseqs2 + HHblits | Runs both engines and merges the alignments |
 
 `custom` needs no database either: pass `--a3m_path <file.a3m>` (`Method.a3m_path`
 in a full-mode input) and that alignment is used for the protein chains instead of
@@ -27,13 +27,13 @@ that disagrees with the declared entities is rejected rather than split into
 alignments for the wrong sequences. RNA and DNA chains are unaffected and still
 take the routes below.
 
-`colab` needs no local database. The `*_cssb` modes run entirely locally against
+`colab` needs no local database. The `*_local` modes run entirely locally against
 the databases under `db/` and take an optional `--msa_config` (default:
 `examples/msa_config.{mmseqs,hhblits,combined}.yaml`). Install those databases
 with `./install_db.sh` (see [../install/README.md](../install/README.md)); where
 they live is set by `db_paths.yaml` at the repository root.
-See [../MSA/cssb_msa/README.md](../MSA/cssb_msa/README.md) and
-[../MSA/cssb_template/README.md](../MSA/cssb_template/README.md).
+See [../MSA/local_msa/README.md](../MSA/local_msa/README.md) and
+[../MSA/local_template/README.md](../MSA/local_template/README.md).
 
 RNA / DNA handling is automatic, regardless of `--msa`:
 - Each FASTA record is checked against the nucleic-acid alphabet (`{A, C, G, T, U}`); records that match are routed out of the protein path.
@@ -67,7 +67,7 @@ Under `<output_dir>/msa/<msa_method>/`:
 | `<target>_na_<i>.a3m` | each RNA chain |
 | `<target>_na_<i>.fa` | each DNA chain |
 | `<pdb>_<chain>.cif` | AF2 template hits, when found |
-| `method_log.yaml` | `{msa, seq, stoi, template_config, templates}` (the `*_cssb` engines also record `dbs`, `merge`, `dedup`, `caps`); inherited by Structure |
+| `method_log.yaml` | `{msa, seq, stoi, template_config, templates}` (the `*_local` engines also record `dbs`, `merge`, `dedup`, `caps`); inherited by Structure |
 
 And one **data yaml** at `<output_dir>/<target>.yaml` matching the [data yaml schema](Structure.md#data-yaml-schema). The header reminds you to fill in `job_name`, `output_dir`, and `seed` before running structure prediction; in `thalkak full` mode these are filled in automatically.
 
@@ -77,7 +77,7 @@ Each call writes / checks `method_log.yaml`. `(msa, seq, stoi)` must match a
 previous run and `*.a3m` files must already exist; then `colab` reuses the
 cached files as is.
 
-For the `*_cssb` modes the match is stricter, because a `--msa_config` swap can
+For the `*_local` modes the match is stricter, because a `--msa_config` swap can
 change the alignment: the recorded `dbs`, merge mode key, `caps` and template
 settings must also match, and for `dedup`-reading merge modes the `dedup` mode
 too. Only settings the active merge mode actually reads are compared, so

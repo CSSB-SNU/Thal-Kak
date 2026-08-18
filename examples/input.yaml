@@ -4,14 +4,14 @@
 
 Method:
   jobname: T1201        # names outputs and the generated FASTA
-  msa: colab            # colab | custom | mmseqs_cssb | hhblits_cssb | mmseqs_hhblits_cssb
+  msa: colab            # colab | custom | mmseqs_local | hhblits_local | mmseqs_hhblits_local
   structure: [boltz2, chai1, protenix_v1, protenix_v2, esmfold2]   # the only field that may be a list (run in order)
   relax: openmm         # none | openmm
   top5_metric: ranking_score  # top-5 ranking: ranking_score | ptm | iptm | plddt (default ranking_score)
   n_seed: 5             # optional (default 5)
   seed_start: 1         # optional (default 1)
-  # a3m_path: my_alignment.a3m                      # required by msa: custom (ColabFold-format a3m)
-  # msa_config: examples/msa_config.combined.yaml   # optional (cssb msa modes only)
+  # a3m_path: examples/T1201.a3m                    # required by msa: custom (ColabFold-format a3m)
+  # msa_config: examples/msa_config.combined.yaml   # optional (local msa modes only)
   # model_config: examples/model_config.yaml        # optional (combined, keyed by model)
   # relax_config: examples/openmm.yaml              # optional
   base_dir: outputs/T1201                           # optional, relative to the working directory (default: this file's dir)

@@ -1,4 +1,4 @@
-# MSA config for `--msa mmseqs_hhblits_cssb` (runs BOTH engines, merges per chain).
+# MSA config for `--msa mmseqs_hhblits_local` (runs BOTH engines, merges per chain).
 # Self-contained: `mmseqs` + `hhblits` source sub-blocks + caps + template + plot.
 # Each source runs as a self-contained single-source build (kept under
 # `_src_mmseqs/` and `_src_hhblits/`), then the two are combined per chain — see
@@ -50,7 +50,7 @@ hhblits:                     # same schema as msa_config.hhblits.yaml (dbs / n_i
   n_iter_env:    3
   evalue:        0.001
 
-# Unpaired merge strategy (same block in all three cssb config files).
+# Unpaired merge strategy (same block in all three local config files).
 #   leveled  = group each chain's per-DB a3ms by DB kind (uniref / env) ACROSS BOTH
 #              SOURCES, raw_seq dedup inside the group, staged hhfilter once per
 #              group, then stack uniref-on-top / env-below. Grouping across sources

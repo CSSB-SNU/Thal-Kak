@@ -83,7 +83,7 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      DeepMind Technologies Limited); no AlphaFold source is reproduced.
 
 7. ColabFold-derived code (Sergey Ovchinnikov) — complex-a3m assembly
-   - File:    MSA/cssb_msa/common/assemble.py
+   - File:    MSA/local_msa/common/assemble.py
    - Source:  ColabFold (https://github.com/sokrypton/ColabFold),
               colabfold/batch.py
    - License: MIT License
@@ -98,11 +98,11 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      notice.
 
 8. ColabFold search procedure (Sergey Ovchinnikov) — no source reproduced
-   - Files:   MSA/cssb_msa/mmseqs/search_uniref.py
-              MSA/cssb_msa/mmseqs/search_envdb.py
-              MSA/cssb_msa/mmseqs/search_pair.py
-              MSA/cssb_msa/mmseqs/runner.py
-              MSA/cssb_template/engine_mmseqs.py
+   - Files:   MSA/local_msa/mmseqs/search_uniref.py
+              MSA/local_msa/mmseqs/search_envdb.py
+              MSA/local_msa/mmseqs/search_pair.py
+              MSA/local_msa/mmseqs/runner.py
+              MSA/local_template/engine_mmseqs.py
    - These modules are original to this work. They drive the `mmseqs` binary
      (MMseqs2, MIT License, https://github.com/soedinglab/MMseqs2) using the
      same documented command sequence and flag values as ColabFold's
@@ -122,7 +122,7 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      here.
 
 9. ColabFold-derived code (Sergey Ovchinnikov) — MSA coverage plots
-   - File:    MSA/cssb_msa/plot/plotting.py
+   - File:    MSA/local_msa/plot/plotting.py
    - Source:  ColabFold (https://github.com/sokrypton/ColabFold),
               colabfold/plot.py
    - License: MIT License
@@ -143,10 +143,10 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      (which builds the multimer matrix from per-chain a3m files, a step
      ColabFold does not have because it reads a prepared feature_dict),
      plot_neff_curve(), PlotResult, _render_per_db_plots(),
-     _detect_target_and_layout() and plot_cssb_msa().
+     _detect_target_and_layout() and plot_local_msa().
 
 10. RoseTTAFold filter schedule — no source reproduced
-    - File:    MSA/cssb_msa/common/hhfilter.py
+    - File:    MSA/local_msa/common/hhfilter.py
     - This module is original to this work. It drives the `hhfilter` binary
       (HH-suite, GPL-3.0-or-later, https://github.com/soedinglab/hh-suite)
       using the staged coverage schedule RoseTTAFold's MSA preparation uses:
@@ -159,8 +159,8 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
 
 11. AlphaFold search and template-filter procedure (DeepMind Technologies
     Limited) — no source reproduced
-    - Files:   MSA/cssb_template/engine_hmmer.py
-               MSA/cssb_msa/hhblits/runner.py
+    - Files:   MSA/local_template/engine_hmmer.py
+               MSA/local_msa/hhblits/runner.py
     - These modules are original to this work. They drive the HMMER and
       HH-suite binaries with the same flag values AlphaFold passes in its own
       tool wrappers (Apache License 2.0, Copyright 2021 DeepMind Technologies

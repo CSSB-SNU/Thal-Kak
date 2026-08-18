@@ -37,17 +37,17 @@ The pipeline consists of three modular stages, each of which can be run independ
 ### Available options
 | Stage | Options |
 |-------|---------|
-| MSA (`--msa`) | `colab`, `custom`, `mmseqs_cssb`, `hhblits_cssb`, `mmseqs_hhblits_cssb` |
+| MSA (`--msa`) | `colab`, `custom`, `mmseqs_local`, `hhblits_local`, `mmseqs_hhblits_local` |
 | Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `protenix_v2`, `esmfold2` |
 | Relaxation (`--relax`) | `none`, `openmm` |
 
 The `colab` MSA uses the remote ColabFold server and needs no local database.
-The `*_cssb` modes run local mmseqs / HHblits searches and require the local MSA
+The `*_local` modes run local mmseqs / HHblits searches and require the local MSA
 databases under `db/` (installed with `install_db.sh`, below). `custom` searches
 nothing: it takes an alignment you already have (`a3m_path`).
 
 Per-stage documentation:
-- [readme/MSA.md](readme/MSA.md): ColabFold MSA and templates; RNA chains are routed through NHMMER. The local `*_cssb` engines are documented under [MSA/cssb_msa](MSA/cssb_msa/README.md) and [MSA/cssb_template](MSA/cssb_template/README.md).
+- [readme/MSA.md](readme/MSA.md): ColabFold MSA and templates; RNA chains are routed through NHMMER. The local `*_local` engines are documented under [MSA/local_msa](MSA/local_msa/README.md) and [MSA/local_template](MSA/local_template/README.md).
 - [readme/Structure.md](readme/Structure.md): Boltz-2, Chai-1, Protenix, and ESMFold2 runners, plus data/model YAML schemas.
 - [readme/Relax.md](readme/Relax.md): OpenMM all-atom relaxation with pLDDT-weighted restraints.
 
@@ -105,7 +105,7 @@ checkpoints (downloaded automatically on each model's first run).
 
 The local databases add much more: the RNA database (`db/rna`, ~70 GiB free
 while it builds, 28 GiB kept — required for RNA or RNP targets) and the
-`*_cssb` protein-MSA databases (`db/`, 1.9 TiB for `mmseqs_cssb` with
+`*_local` protein-MSA databases (`db/`, 1.9 TiB for `mmseqs_local` with
 templates, 5.4 TiB for every family). See
 [Local MSA databases](#local-msa-databases) below.
 
@@ -153,9 +153,9 @@ read, into `<repo>/db/`. Four families:
 | Family | Needed by | Installed |
 |---|---|---:|
 | `rna` | any RNA or RNP target — Rfam + RNAcentral, searched with NHMMER | 28 GiB |
-| `template` | template search on any `*_cssb` mode | 81 GiB |
-| `mmseqs` | `--msa mmseqs_cssb`, `--msa mmseqs_hhblits_cssb` | 1.8 TiB |
-| `hhblits` | `--msa hhblits_cssb`, `--msa mmseqs_hhblits_cssb` | 3.5 TiB |
+| `template` | template search on any `*_local` mode | 81 GiB |
+| `mmseqs` | `--msa mmseqs_local`, `--msa mmseqs_hhblits_local` | 1.8 TiB |
+| `hhblits` | `--msa hhblits_local`, `--msa mmseqs_hhblits_local` | 3.5 TiB |
 
 **Any RNA or RNP target needs `rna` installed, `--msa colab` included.** The
 ColabFold API returns protein alignments only, so an RNA chain has no remote
@@ -163,7 +163,7 @@ fallback: without these databases `msa_generation` refuses rather than align an
 RNA chain against nothing.
 
 For protein chains you choose: `--msa colab` searches the remote ColabFold
-server and needs nothing local, while the `*_cssb` modes search locally and read
+server and needs nothing local, while the `*_local` modes search locally and read
 `mmseqs` and/or `hhblits`, plus `template` for their template search.
 
 Installing the local MSA and template databases is covered in
@@ -207,7 +207,7 @@ The input yaml has two sections (see the worked example above and
 - **`Method`** — `jobname`, `msa`, `structure`, `relax`; plus optional
   `top5_metric` (which confidence metric ranks the top-5: `ranking_score` |
   `ptm` | `iptm` | `plddt`, default `ranking_score`), `n_seed` (default 5),
-  `seed_start` (default 1), `msa_config` (cssb modes), `model_config` (a
+  `seed_start` (default 1), `msa_config` (local modes), `model_config` (a
   combined config keyed by model, so it also covers a `structure` sweep),
   `relax_config`, and `base_dir` (default: the input file's directory).
   **`structure` is the only field that may be a list** — give it several models
@@ -226,7 +226,7 @@ pass/fail summary.
 
 ### Individual stages
 ```
-# MSA only (colab; the *_cssb modes take an optional --msa_config)
+# MSA only (colab; the *_local modes take an optional --msa_config)
 thalkak msa --msa colab --seq <target.fa> --stoi A1
 
 # Structure only

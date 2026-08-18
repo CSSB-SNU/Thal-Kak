@@ -36,7 +36,7 @@ def read_fasta_records(fasta):
     """Parse FASTA into [(header, sequence), ...]; robust to multi-line
     sequences, blank lines, and whitespace. Raises ValueError on data before
     any header or an empty file. Shared FASTA reader — also imported by
-    MSA/cssb_msa/common/input.py (parse_inputs) so both MSA paths use one parser.
+    MSA/local_msa/common/input.py (parse_inputs) so both MSA paths use one parser.
     """
     records, header, buf = [], None, []
     with open(fasta, "r") as f:

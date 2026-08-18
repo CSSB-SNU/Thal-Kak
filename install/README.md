@@ -1,8 +1,8 @@
 # Installing the local databases
 
 `install_db.sh` at the repository root installs the databases the local MSA
-modes read — `--msa mmseqs_cssb`, `--msa hhblits_cssb`, `--msa
-mmseqs_hhblits_cssb` — plus the local template search snapshot and the RNA
+modes read — `--msa mmseqs_local`, `--msa hhblits_local`, `--msa
+mmseqs_hhblits_local` — plus the local template search snapshot and the RNA
 databases the RNA/RNP path needs.
 
 This file is what you need before running it: what it installs, how much disk
@@ -22,16 +22,16 @@ sources, so `--family` is required and has no default.
 
 | Family | What | Needed by |
 |---|---|---|
-| `mmseqs` | the MMseqs2 search databases | `mmseqs_cssb`, `mmseqs_hhblits_cssb` |
-| `template` | the local template search snapshot | template search on any cssb mode |
+| `mmseqs` | the MMseqs2 search databases | `mmseqs_local`, `mmseqs_hhblits_local` |
+| `template` | the local template search snapshot | template search on any local mode |
 | `rna` | Rfam + RNAcentral, clustered | any RNA or RNP target |
-| `hhblits` | the HH-suite (FFindex) builds | `hhblits_cssb`, `mmseqs_hhblits_cssb` |
+| `hhblits` | the HH-suite (FFindex) builds | `hhblits_local`, `mmseqs_hhblits_local` |
 
 **The RNA databases are not optional.** The public ColabFold API returns protein
 alignments only, so without them `msa_generation` refuses rather than align an
 RNA chain against nothing.
 
-**Multimers on `hhblits_cssb` also need the mmseqs `uniref30_2302`** with its
+**Multimers on `hhblits_local` also need the mmseqs `uniref30_2302`** with its
 `db_mapping` / `db_taxonomy` sidecars, because the HH-suite UniRef100 carries no
 taxonomy and pairing is delegated to mmseqs.
 

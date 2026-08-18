@@ -5,7 +5,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Method choice sets — shared by the CLI flags and the --input YAML loader
 # (full_args_from_input), so both interfaces validate against one list.
-MSA_CHOICES = ["colab", "custom", "mmseqs_cssb", "hhblits_cssb", "mmseqs_hhblits_cssb"]
+MSA_CHOICES = ["colab", "custom", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"]
 STRUCTURE_CHOICES = ["boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2"]
 RELAX_CHOICES = ["none", "openmm"]
 # Top-5 selection metric -> the summary-CSV column it ranks by. Every predictor
@@ -219,7 +219,7 @@ def full_args_from_input(input_path):
         raise SystemExit(
             f"{input_path}: at least one protein/dna/rna entity is required."
         )
-    # The MSA stoi (parse_fasta / cssb parse_inputs) keys chains A-Z, contiguous,
+    # The MSA stoi (parse_fasta / local parse_inputs) keys chains A-Z, contiguous,
     # so unique polymer entities cap at 26 (copies per entity are unbounded).
     if len(polymers) > len(string.ascii_uppercase):
         raise SystemExit(
@@ -429,7 +429,7 @@ def cli():
     )
     p_msa.add_argument(
         "--msa_config", type=str, default=None,
-        help="MSA config yaml for cssb modes (default: "
+        help="MSA config yaml for local modes (default: "
              "examples/msa_config.{mmseqs,hhblits,combined}.yaml)",
     )
 

@@ -22,7 +22,7 @@ human() {
 usage() {
     cat <<'EOF'
 install_db.sh — install the local MSA, template and RNA databases that
-`--msa mmseqs_cssb`, `--msa hhblits_cssb` and `--msa mmseqs_hhblits_cssb` read.
+`--msa mmseqs_local`, `--msa hhblits_local` and `--msa mmseqs_hhblits_local` read.
 
 Usage
     ./install_db.sh --family LIST [KEY ...]
@@ -334,4 +334,4 @@ for k in "${INSTALLED[@]}"; do
 done
 log
 warn_if_rna_missing
-log "Then run:  thalkak msa --msa mmseqs_cssb --seq <fasta> --stoi <e.g. A1>"
+log "Then run:  thalkak msa --msa mmseqs_local --seq <fasta> --stoi <e.g. A1>"

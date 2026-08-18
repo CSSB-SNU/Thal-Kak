@@ -6,7 +6,7 @@ resolve_targets() {
         python - "$@" <<'PY'
 import sys
 
-from MSA.cssb_msa.common.db_registry import DEFAULT_REGISTRY
+from MSA.local_msa.common.db_registry import DEFAULT_REGISTRY
 from MSA.db_paths import DEFAULT_SUBDIR, PATHS
 
 fam, keys = sys.argv[1], sys.argv[2:]

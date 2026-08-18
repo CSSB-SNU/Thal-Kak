@@ -7,15 +7,15 @@ from MSA.script.colab_msa_template_search.colab_a3m_to_yaml import (
     split_colab_a3m_write_yaml,
 )
 from MSA.script.colab_msa_template_search.parse_fasta import parse_fasta
-from MSA.cssb_template._common import resolve_template_engine
+from MSA.local_template._common import resolve_template_engine
 from MSA.db_paths import DB_PATHS_YAML, RNA_DB_ROOT
 from thalkak import get_logger, run_logged, log_stream
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MSA_CONFIG_DEFAULTS = {
-    "mmseqs_cssb": os.path.join(ROOT, "examples", "msa_config.mmseqs.yaml"),
-    "hhblits_cssb": os.path.join(ROOT, "examples", "msa_config.hhblits.yaml"),
-    "mmseqs_hhblits_cssb": os.path.join(ROOT, "examples", "msa_config.combined.yaml"),
+    "mmseqs_local": os.path.join(ROOT, "examples", "msa_config.mmseqs.yaml"),
+    "hhblits_local": os.path.join(ROOT, "examples", "msa_config.hhblits.yaml"),
+    "mmseqs_hhblits_local": os.path.join(ROOT, "examples", "msa_config.combined.yaml"),
 }
 
 log = get_logger("msa")
@@ -31,16 +31,16 @@ def _is_method_entity_input(path):
 
 
 def resolve_msa_config_path(args):
-    """Resolve the per-mode MSA config yaml for this invocation (cssb modes only).
+    """Resolve the per-mode MSA config yaml for this invocation (local modes only).
 
     `--msa_config <path>` overrides; omitted → the per-mode default
     (msa_config.{mmseqs,hhblits,combined}.yaml). Config is selected
     per-invocation by this flag only (no env-var fallback), so it can't leak
-    across shells/cron and stays visible in ps/slurm logs. Non-cssb modes
-    (colab) use no cssb config → returns None.
+    across shells/cron and stays visible in ps/slurm logs. Non-local modes
+    (colab) use no local config → returns None.
     """
     if args.msa not in MSA_CONFIG_DEFAULTS:
-        return None  # colab / non-cssb: no cssb config yaml
+        return None  # colab / non-local: no local config yaml
     path = args.msa_config or MSA_CONFIG_DEFAULTS[args.msa]
     if not os.path.isfile(path):
         raise FileNotFoundError(f"MSA config yaml missing: {path}")
@@ -66,9 +66,9 @@ def _normalize_template_config(msa_cfg, msa_name):
     }
 
 
-def _write_cssb_protein_inputs(protein_entities, target, dest_dir):
+def _write_local_protein_inputs(protein_entities, target, dest_dir):
     """Write a protein-only, per-entity FASTA + return a contiguous protein
-    stoi string in the exact form MSA.cssb_msa.common.input.parse_inputs
+    stoi string in the exact form MSA.local_msa.common.input.parse_inputs
     requires (one record per unique entity; chain letters A,B,C... positional;
     stoi keys contiguous from A). `protein_entities` = parse_fasta's 3rd return
     [{"sequence","copy","orig_chain"}, ...] in original FASTA order. Original
@@ -79,7 +79,7 @@ def _write_cssb_protein_inputs(protein_entities, target, dest_dir):
 
     if len(protein_entities) > len(string.ascii_uppercase):
         raise ValueError(
-            f"cssb protein input supports at most 26 unique protein entities; "
+            f"local protein input supports at most 26 unique protein entities; "
             f"got {len(protein_entities)}"
         )
     protein_fasta_path = os.path.abspath(
@@ -147,9 +147,9 @@ def _resolve_custom_a3m(args, protein_entities):
 
 
 def msa_generation(args):
-    from MSA.cssb_msa.common.input import normalize_stoi
-    from MSA.cssb_msa.common.caps import live_caps, normalize_caps
-    from MSA.cssb_msa.common.leveled_merge import (
+    from MSA.local_msa.common.input import normalize_stoi
+    from MSA.local_msa.common.caps import live_caps, normalize_caps
+    from MSA.local_msa.common.leveled_merge import (
         merge_key_matches,
         resolve_merge_cfg,
     )
@@ -166,7 +166,7 @@ def msa_generation(args):
     target_name = os.path.basename(args.seq).split(".")[0]
     # The CLI passes a legacy stoi string ("A1B1"); normalize + validate it here
     # (UNK->A1, canonical chain order) for parse_fasta, the skip-key, method_log,
-    # and the --stoi handed to the MSA.cssb_msa subprocess.
+    # and the --stoi handed to the MSA.local_msa subprocess.
     stoi_str = normalize_stoi(args.stoi)
     cfg_path = resolve_msa_config_path(args)
 
@@ -216,7 +216,7 @@ def msa_generation(args):
             if base_match:
                 if args.msa == "colab":
                     skip_msa = True
-                elif args.msa in ("mmseqs_cssb", "hhblits_cssb", "mmseqs_hhblits_cssb"):
+                elif args.msa in ("mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"):
                     if msa_cfg is None:
                         # These three ARE the MSA_CONFIG_DEFAULTS keys, so cfg_path
                         # — and msa_cfg — is always set here unless a mode was added
@@ -225,7 +225,7 @@ def msa_generation(args):
                             f"{args.msa} has no entry in MSA_CONFIG_DEFAULTS"
                         )
                     recorded_dbs = method_log.get("dbs")
-                    if args.msa == "mmseqs_hhblits_cssb":
+                    if args.msa == "mmseqs_hhblits_local":
                         config_dbs = {
                             "mmseqs": (msa_cfg.get("mmseqs") or {}).get("dbs"),
                             "hhblits": (msa_cfg.get("hhblits") or {}).get("dbs"),
@@ -237,7 +237,7 @@ def msa_generation(args):
                     merge_match = merge_key_matches(method_log.get("merge"), merge_now)
                     if merge_now["mode"] == "leveled":
                         dedup_match = True
-                    elif args.msa == "mmseqs_cssb":
+                    elif args.msa == "mmseqs_local":
                         recorded_dedup = (method_log.get("dedup") or {}).get(
                             "mode", "none"
                         )
@@ -245,7 +245,7 @@ def msa_generation(args):
                             "mode", "raw_seq"
                         )
                         dedup_match = recorded_dedup == config_dedup
-                    elif args.msa == "mmseqs_hhblits_cssb":
+                    elif args.msa == "mmseqs_hhblits_local":
                         recorded_dedup = (method_log.get("dedup") or {}).get(
                             "mode", "none"
                         )
@@ -328,15 +328,15 @@ def msa_generation(args):
                     log.info(f"Using the supplied a3m as the protein MSA: {custom_a3m}")
                     shutil.copyfile(custom_a3m, main_a3m)
                     output_yaml = split_colab_a3m_write_yaml(main_a3m)
-                case "mmseqs_cssb" | "hhblits_cssb" | "mmseqs_hhblits_cssb":
-                    protein_fasta_path, protein_stoi = _write_cssb_protein_inputs(
+                case "mmseqs_local" | "hhblits_local" | "mmseqs_hhblits_local":
+                    protein_fasta_path, protein_stoi = _write_local_protein_inputs(
                         protein_entities, target_name, msa_dir
                     )
                     run_logged(
                         [
                             sys.executable,
                             "-m",
-                            "MSA.cssb_msa",
+                            "MSA.local_msa",
                             "--yaml",
                             cfg_path,
                             "--mode",
@@ -501,7 +501,7 @@ if __name__ == "__main__":
         "--msa",
         type=str,
         required=True,
-        choices=["colab", "mmseqs_cssb", "hhblits_cssb", "mmseqs_hhblits_cssb"],
+        choices=["colab", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"],
         help="MSA engine. Other knobs live in the MSA config yaml "
         "(see --msa_config; default examples/msa_config.<mode>.yaml).",
     )
