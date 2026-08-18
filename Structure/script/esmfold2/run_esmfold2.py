@@ -53,6 +53,9 @@ if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
 from chain_utils import assign_chain_indices
 from chain_utils import PDB_CHAIN_CHARS, CIF_CHAIN_CHARS
+from thalkak import get_logger
+
+log = get_logger("structure")
 
 
 def _enable_cueq_ops() -> None:
@@ -502,11 +505,10 @@ def main(data_yaml_path, esm_yaml_path):
             if _cif_to_pdb(cif_path, pdb_path) is None:
                 fallback_cif = os.path.join(common, f"{stem}.cif")
                 shutil.copyfile(cif_path, fallback_cif)
-                print(
-                    f"[esmfold2] warning: {stem}: model has more than "
+                log.warning(
+                    f"[esmfold2] {stem}: model has more than "
                     f"{len(PDB_CHAIN_CHARS)} chains; cif->pdb conversion not "
-                    f"possible. Copied cif to {fallback_cif} instead.",
-                    flush=True,
+                    f"possible. Copied cif to {fallback_cif} instead."
                 )
             # ESMFold2 emits plddt in [0, 1]; rescale to the 0-100 convention
             # the rest of the pipeline (and the comparison plot) expects.
@@ -583,6 +585,9 @@ def main(data_yaml_path, esm_yaml_path):
 
 
 if __name__ == "__main__":
+    from thalkak import setup_logging
+
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_yaml", type=str, required=True)
     parser.add_argument("--esmfold2_yaml", type=str, required=True)

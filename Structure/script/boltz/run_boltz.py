@@ -1,4 +1,4 @@
-import yaml, subprocess, os, json, argparse, shutil, time, sys, string
+import yaml, os, json, argparse, shutil, time, sys, string
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -13,6 +13,9 @@ for _p in (SCRIPT_DIR, COMMON_DIR):
 from chain_utils import assign_chain_indices
 from template_cleaner import clean_template_for_boltz
 from chain_utils import PDB_CHAIN_CHARS, CIF_CHAIN_CHARS
+from thalkak import get_logger, run_logged
+
+log = get_logger("structure")
 
 
 def auth_to_label(cif_path, auth_chain):
@@ -440,21 +443,13 @@ def main(data_yaml, boltz2_yaml):
     if data_config["seed"] != None:
         base_command = command
         for seed in data_config["seed"]:
-            subprocess.run(
-                f"{base_command} --seed {seed}",
-                shell=True,
-                check=True,
-            )
+            run_logged(f"{base_command} --seed {seed}", log=log)
             os.rename(
                 _require_predictions(seed),
                 f"{temp_dir}/predictions/{name}_seed_{seed}/",
             )
     else:
-        subprocess.run(
-            command,
-            shell=True,
-            check=True,
-        )
+        run_logged(command, log=log)
         _require_predictions()
     output_dir = rename_output_dir(output_dir)
     mv_output_dir(temp_dir, output_dir)
@@ -505,8 +500,8 @@ def main(data_yaml, boltz2_yaml):
                     reorder_pdb_chains(common_pdb)
                 else:
                     os.remove(common_pdb)
-                    print(
-                        f"[boltz] warning: {stem}: model has more than "
+                    log.warning(
+                        f"[boltz] {stem}: model has more than "
                         f"{len(PDB_CHAIN_CHARS)} chains; cannot write a standard "
                         f"PDB and boltz was run with output_format=pdb (no cif to "
                         f"keep). Skipped."
@@ -525,6 +520,9 @@ def main(data_yaml, boltz2_yaml):
 
 
 if __name__ == "__main__":
+    from thalkak import setup_logging
+
+    setup_logging()
     start = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_yaml", type=str, required=True)

@@ -52,6 +52,7 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
     picks. Falls back to ranking_score if the requested column is absent."""
     from Structure.script.common.structure_validation import validation
 
+    log = get_logger("thalkak.full")
     summary_csvs = glob.glob(os.path.join(decoy_dir, "*_results_summary.csv"))
     if not summary_csvs:
         raise FileNotFoundError(f"No *_results_summary.csv found in {decoy_dir}")
@@ -59,7 +60,7 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
         rows = list(csv.DictReader(f))
     column = _TOP5_METRIC_COLUMN.get(metric, "ranking_score")
     if rows and column not in rows[0]:
-        print(f"  WARN: no {column!r} column in the summary; using ranking_score")
+        log.warning(f"no {column!r} column in the summary; using ranking_score")
         column = "ranking_score"
 
     def _score(row):
@@ -102,8 +103,8 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
         yaml.dump(method_log, f, sort_keys=False)
 
     if len(picked) < 5:
-        print(
-            f"  WARN: only {len(picked)} valid candidate(s) for "
+        log.warning(
+            f"only {len(picked)} valid candidate(s) for "
             f"{os.path.basename(top5_dir)} (wanted 5)"
         )
     return picked
@@ -357,7 +358,8 @@ def run_full(args):
         top5_dir = os.path.join(base_dir, "top5", job_name)
         try:
             section(log, f"Top-5 selection ({job_name})")
-            _select_top5_for_job(decoy_dir, top5_dir, metric=args.top5_metric)
+            with log_stream(log):
+                _select_top5_for_job(decoy_dir, top5_dir, metric=args.top5_metric)
             log.info(f"Top-5 saved at: {top5_dir}")
         except Exception as e:
             _fail("top5", e, structure=structure)
@@ -381,7 +383,7 @@ def run_full(args):
     log.info(f"{len(ok)} structure model(s) completed, {len(failed)} failed.")
     for r in failed:
         where = {k: v for k, v in r.items() if k not in ("status", "error")}
-        log.warning(f"  {r['status']}: {where} -> {r['error']}")
+        log.warning(f"{r['status']}: {where} -> {r['error']}")
     if failed:
         sys.exit(1)
 
@@ -485,7 +487,6 @@ def cli():
 # funnelled through the same logger via run_logged (subprocess) / log_stream.
 
 _PKG = "thalkak"
-_SUB = "  │ "
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -525,10 +526,10 @@ def section(log, title, width=60):
 
 def _emit(log, level, line):
     """Log one line of external-tool output: keep only the final \\r-overwrite
-    (tqdm bars), strip trailing space, indent under _SUB, skip if blank."""
+    (tqdm bars), strip trailing space, skip if blank."""
     line = line.rsplit("\r", 1)[-1].rstrip()
     if line:
-        log.log(level, "%s%s", _SUB, line)
+        log.log(level, "%s", line)
 
 
 def run_logged(cmd, log=None, check=True, **kw):

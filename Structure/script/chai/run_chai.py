@@ -31,6 +31,9 @@ if COMMON_DIR not in sys.path:
 from process_template import generate_m8_from_hhsearch
 from chain_utils import assign_chain_indices
 from chain_utils import PDB_CHAIN_CHARS, CIF_CHAIN_CHARS
+from thalkak import get_logger
+
+log = get_logger("structure")
 
 @lru_cache(maxsize=None)
 def ccd_to_smiles(ccd_id):
@@ -303,8 +306,8 @@ def output_adapter(target, option, empty_output_dir, result_data, result_file):
             if len(chains) > len(PDB_CHAIN_CHARS):
                 fallback_cif = f"{output_dir}/common/{pdb_filename[:-4]}.cif"
                 shutil.copyfile(fp, fallback_cif)
-                print(
-                    f"[Warning] {pdb_filename[:-4]}: model has more than "
+                log.warning(
+                    f"{pdb_filename[:-4]}: model has more than "
                     f"{len(PDB_CHAIN_CHARS)} chains; cif->pdb conversion not "
                     f"possible. Copied cif to {fallback_cif} instead."
                 )
@@ -338,7 +341,7 @@ def output_adapter(target, option, empty_output_dir, result_data, result_file):
             success_count += 1
             
         except PDBConstructionException as e:
-            print(f"[Warning] Could not parse {filename}. Skipping. Error: {e}")
+            log.warning(f"Could not parse {filename}. Skipping. Error: {e}")
         except Exception as e:
             print(f"Error processing {filename}. Skipping. Error: {e}")
 
@@ -382,8 +385,8 @@ def draw_plots(result_file, output_dir):
         # A sample whose pae tensor or cif is missing (e.g. its seed failed
         # mid-adapter) leaves its panel blank rather than killing the figure.
         if not pae_fp.is_file() or ca_plddts is None:
-            print(
-                f"[Warning] Missing plot inputs for seed_{seed}_sample_{sample}; "
+            log.warning(
+                f"Missing plot inputs for seed_{seed}_sample_{sample}; "
                 f"skipping panel."
             )
             continue
@@ -480,7 +483,7 @@ def main(data_json, chai_json):
         hits_fp = generate_m8_from_hhsearch(num_map, a3m_list, data_config["templates"], output_dir)
     else:
         hits_fp = Path()
-        print("[Warning] No custom templates are detected")
+        log.warning("No custom templates are detected")
     
     # run inference
     if msa_parent_dir.is_dir():
@@ -555,13 +558,16 @@ def main(data_json, chai_json):
     try:
         draw_plots(result_file, output_dir)
     except Exception as e:
-        print(f"[Warning] Plot generation failed: {e}")
+        log.warning(f"Plot generation failed: {e}")
 
     print(f"RESULT_DIR:{output_dir}")
 
     return output_dir
 
 if __name__ == "__main__":
+    from thalkak import setup_logging
+
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_json", type=str, required=True)
     parser.add_argument("--chai_json", type=str, required=True)

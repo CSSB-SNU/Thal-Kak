@@ -57,7 +57,7 @@ def _download_protenix_v2(checkpoint_path):
         pct = min(100.0, block_num * block_size * 100.0 / total_size)
         if pct >= logged_pct + 10:
             logged_pct = int(pct) // 10 * 10
-            log.info(f"  downloading protenix-v2.pt ... {logged_pct}%")
+            log.info(f"downloading protenix-v2.pt ... {logged_pct}%")
 
     log.info(
         f"protenix-v2 checkpoint not found; downloading from mirror to {checkpoint_path}"
