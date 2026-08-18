@@ -94,6 +94,58 @@ def _write_cssb_protein_inputs(protein_entities, target, dest_dir):
     return protein_fasta_path, "".join(stoi_tokens)
 
 
+def _resolve_custom_a3m(args, protein_entities):
+    """Validate `--msa custom`'s a3m and return its absolute path.
+
+    The file is treated exactly like one colabfold wrote, so it must carry
+    ColabFold's `#<lengths>\t<copies>` header: split_colab_a3m_write_yaml reads
+    the chain lengths and copy counts from it to cut the per-chain paired /
+    unpaired alignments. A header that disagrees with the declared entities would
+    still split cleanly, into alignments for the wrong sequences, so it is
+    checked here rather than left to fail downstream."""
+    src = getattr(args, "a3m_path", None)
+    if not src:
+        raise SystemExit(
+            "--msa custom needs the a3m to use (--a3m_path, or Method.a3m_path "
+            "in a full-mode input)."
+        )
+    src = os.path.abspath(src)
+    if not os.path.isfile(src):
+        raise SystemExit(f"a3m_path is not a file: {src}")
+
+    with open(src) as f:
+        header = f.readline()
+    if not header.startswith("#"):
+        raise SystemExit(
+            f"{src}: --msa custom expects a ColabFold-format a3m, whose first "
+            f"line is '#<comma-separated chain lengths>\t<comma-separated copy "
+            f"counts>'. Got: {header.strip()[:60]!r}"
+        )
+    fields = header[1:].strip().split("\t")
+    try:
+        lengths = [int(x) for x in fields[0].split(",")]
+        counts = (
+            [int(x) for x in fields[1].split(",")] if len(fields) > 1
+            else [1] * len(lengths)
+        )
+    except ValueError:
+        raise SystemExit(
+            f"{src}: could not read chain lengths / copy counts from the a3m "
+            f"header line {header.strip()[:60]!r}."
+        )
+
+    want_lengths = [len(e["sequence"]) for e in protein_entities]
+    want_counts = [int(e["copy"]) for e in protein_entities]
+    if lengths != want_lengths or counts != want_counts:
+        raise SystemExit(
+            f"{src}: the a3m header describes lengths {lengths} x copies "
+            f"{counts}, but the input declares lengths {want_lengths} x copies "
+            f"{want_counts}. The a3m must cover the same protein entities, in "
+            f"the same order."
+        )
+    return src
+
+
 def msa_generation(args):
     from MSA.cssb_msa.common.input import normalize_stoi
     from MSA.cssb_msa.common.caps import live_caps, normalize_caps
@@ -271,6 +323,11 @@ def msa_generation(args):
                     output_msa = main_a3m
                     output_yaml = split_colab_a3m_write_yaml(output_msa)
                     log.info(f"MSA generated at: {output_msa}")
+                case "custom":
+                    custom_a3m = _resolve_custom_a3m(args, protein_entities)
+                    log.info(f"Using the supplied a3m as the protein MSA: {custom_a3m}")
+                    shutil.copyfile(custom_a3m, main_a3m)
+                    output_yaml = split_colab_a3m_write_yaml(main_a3m)
                 case "mmseqs_cssb" | "hhblits_cssb" | "mmseqs_hhblits_cssb":
                     protein_fasta_path, protein_stoi = _write_cssb_protein_inputs(
                         protein_entities, target_name, msa_dir
@@ -303,6 +360,11 @@ def msa_generation(args):
         with open(output_yaml, "r") as f:
             yaml_content = yaml.safe_load(f)
     else:
+        if args.msa == "custom":
+            raise SystemExit(
+                "--msa custom supplies the protein MSA, but this target has no "
+                "protein chains. Use a protein-capable msa mode, or drop a3m_path."
+            )
         log.info("No protein chains found, skipping protein MSA generation.")
         yaml_content = {"a3m": []}
 

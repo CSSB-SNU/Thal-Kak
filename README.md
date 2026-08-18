@@ -37,13 +37,14 @@ The pipeline consists of three modular stages, each of which can be run independ
 ### Available options
 | Stage | Options |
 |-------|---------|
-| MSA (`--msa`) | `colab`, `mmseqs_cssb`, `hhblits_cssb`, `mmseqs_hhblits_cssb` |
+| MSA (`--msa`) | `colab`, `custom`, `mmseqs_cssb`, `hhblits_cssb`, `mmseqs_hhblits_cssb` |
 | Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `protenix_v2`, `esmfold2` |
 | Relaxation (`--relax`) | `none`, `openmm` |
 
 The `colab` MSA uses the remote ColabFold server and needs no local database.
 The `*_cssb` modes run local mmseqs / HHblits searches and require the local MSA
-databases under `db/` (installed with `install_db.sh`, below).
+databases under `db/` (installed with `install_db.sh`, below). `custom` searches
+nothing: it takes an alignment you already have (`a3m_path`).
 
 Per-stage documentation:
 - [readme/MSA.md](readme/MSA.md): ColabFold MSA and templates; RNA chains are routed through NHMMER. The local `*_cssb` engines are documented under [MSA/cssb_msa](MSA/cssb_msa/README.md) and [MSA/cssb_template](MSA/cssb_template/README.md).

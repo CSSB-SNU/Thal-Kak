@@ -13,9 +13,19 @@ FASTA + stoi  ──►  [MSA]  ──►  data yaml  ──►  Structure  ─�
 | Option | Backend | What it does |
 |--------|---------|--------------|
 | `colab` | ColabFold (`colabfold_search`) via the configured env | MMseqs2 search against ColabFold DBs, then AF2 template lookup; the combined a3m is split per chain into paired / unpaired files |
+| `custom` | none — your own alignment | No search. Splits the a3m given by `--a3m_path` per chain, exactly as the `colab` output is split |
 | `mmseqs_cssb` | local MMseqs2 | Local MMseqs2 search against the databases under `db/` (no remote server) |
 | `hhblits_cssb` | local HHblits | Local HHblits search against the databases under `db/` |
 | `mmseqs_hhblits_cssb` | local MMseqs2 + HHblits | Runs both engines and merges the alignments |
+
+`custom` needs no database either: pass `--a3m_path <file.a3m>` (`Method.a3m_path`
+in a full-mode input) and that alignment is used for the protein chains instead of
+searching for one. The file must be in ColabFold-complex format — the first line
+is `#<comma-separated chain lengths>\t<comma-separated copy counts>` — because it
+goes through the same per-chain paired / unpaired split as a `colab` a3m. A header
+that disagrees with the declared entities is rejected rather than split into
+alignments for the wrong sequences. RNA and DNA chains are unaffected and still
+take the routes below.
 
 `colab` needs no local database. The `*_cssb` modes run entirely locally against
 the databases under `db/` and take an optional `--msa_config` (default:
@@ -43,6 +53,7 @@ thalkak msa --msa colab \
 
 - `--seq`: CASP FASTA. One record per distinct sequence, in chain order.
 - `--stoi`: stoichiometry string, e.g. `A1`, `A2B1`, `A1B1C2`. `An` (literal `n`) marks an unknown copy count for chain `A` and is treated as `1`.
+- `--a3m_path`: required by `--msa custom`, rejected by the other modes. The ColabFold-format a3m to use for the protein chains.
 - `--output_dir`: optional override; defaults to the directory containing the FASTA.
 
 ## Outputs

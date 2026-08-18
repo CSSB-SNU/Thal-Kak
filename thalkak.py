@@ -5,7 +5,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Method choice sets — shared by the CLI flags and the --input YAML loader
 # (full_args_from_input), so both interfaces validate against one list.
-MSA_CHOICES = ["colab", "mmseqs_cssb", "hhblits_cssb", "mmseqs_hhblits_cssb"]
+MSA_CHOICES = ["colab", "custom", "mmseqs_cssb", "hhblits_cssb", "mmseqs_hhblits_cssb"]
 STRUCTURE_CHOICES = ["boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2"]
 RELAX_CHOICES = ["none", "openmm"]
 # Top-5 selection metric -> the summary-CSV column it ranks by. Every predictor
@@ -36,6 +36,7 @@ FULL_METHOD_FIELDS = [
     FullField("top5_metric", False, "ranking_score", TOP5_METRIC_CHOICES),
     FullField("n_seed", False, 5, None),
     FullField("seed_start", False, 1, None),
+    FullField("a3m_path", False, None, None),
     FullField("msa_config", False, None, None),
     FullField("model_config", False, None, None),
     FullField("relax_config", False, None, None),
@@ -161,6 +162,20 @@ def full_args_from_input(input_path):
                 f"list."
             )
 
+    # `custom` takes the protein MSA from a3m_path instead of searching for it;
+    # any other mode has nothing to do with that file, so a stray a3m_path is an
+    # error rather than a setting that quietly does nothing.
+    if resolved["msa"] == "custom" and not resolved["a3m_path"]:
+        raise SystemExit(
+            f"{input_path}: Method.msa = 'custom' requires Method.a3m_path "
+            f"(the ColabFold-format a3m to use)."
+        )
+    if resolved["msa"] != "custom" and resolved["a3m_path"]:
+        raise SystemExit(
+            f"{input_path}: Method.a3m_path only applies to Method.msa = "
+            f"'custom', but msa is {resolved['msa']!r}."
+        )
+
     jobname = str(resolved["jobname"])
     base_dir = os.path.abspath(
         resolved["base_dir"] or os.path.dirname(os.path.abspath(input_path))
@@ -235,6 +250,7 @@ def full_args_from_input(input_path):
         top5_metric=resolved["top5_metric"],
         seq=fasta_path,
         stoi="".join(stoi_tokens),
+        a3m_path=resolved["a3m_path"],
         msa_config=resolved["msa_config"],
         model_config=resolved["model_config"],
         relax_config=resolved["relax_config"],
@@ -288,13 +304,15 @@ def run_full(args):
     section(log, f"MSA generation ({msa})")
     try:
         msa_args = namedtuple(
-            "MsaArgs", ["msa", "seq", "stoi", "output_dir", "msa_config"]
+            "MsaArgs",
+            ["msa", "seq", "stoi", "output_dir", "msa_config", "a3m_path"],
         )(
             msa=msa,
             seq=args.seq,
             stoi=args.stoi,
             output_dir=base_dir,
             msa_config=args.msa_config,
+            a3m_path=args.a3m_path,
         )
         data_yaml = msa_generation(msa_args)
         # Set the model-independent data-yaml fields once: ligands (from
@@ -381,8 +399,9 @@ def cli():
         "--input", type=str, required=True,
         help="Path to a full-mode input yaml (Method + Entity sections). "
              "Method: jobname, msa, structure (a value or a list, run in "
-             "order), relax, optional top5_metric/n_seed/seed_start/msa_config/"
-             "model_config/relax_config/base_dir. Only structure may be a list. "
+             "order), relax, optional top5_metric/n_seed/seed_start/a3m_path/"
+             "msa_config/model_config/relax_config/base_dir. Only structure may "
+             "be a list. "
              "Entity: a list of protein/dna/rna (seq, copy) and/or ligand "
              "(smiles|ccd, copy). See " + EXAMPLE_INPUT + ".",
     )
@@ -398,6 +417,11 @@ def cli():
     )
     p_msa.add_argument(
         "--stoi", type=str, required=True, help="Stoichiometry, e.g. 'A1'"
+    )
+    p_msa.add_argument(
+        "--a3m_path", type=str, default=None,
+        help="ColabFold-format a3m to use as the protein MSA "
+             "(required by --msa custom; not accepted by the other modes)",
     )
     p_msa.add_argument(
         "--output_dir", type=str, default=None,
