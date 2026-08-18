@@ -1,7 +1,7 @@
 import argparse, yaml, os, glob, sys
 from datetime import datetime
 
-from thalkak import get_logger, log_stream
+from thalkak import get_logger, log_stream, run_logged
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -190,10 +190,21 @@ def structure_prediction(args):
 
             if protenix_root not in sys.path:
                 sys.path.insert(0, protenix_root)
-            from runner.inference import run as protenix_run
-
+            # protenix runs in its own process. It merges a model's overrides
+            # into its module-level config dicts in place -- runner/inference.py
+            # builds base_configs as a shallow {**configs_base}, so the nested
+            # sections are the module's own objects and deep_update writes
+            # straight through them. Two generations in one interpreter would
+            # therefore build the second model with the first one's
+            # architecture: after protenix_v2, msa_module.c_z holds the literal
+            # 256 and hidden_scale_up is True (the GlobalConfigValue sentinels
+            # that would resolve them back are gone), and the protenix_v1
+            # checkpoint does not fit that shape. A fresh interpreter starts
+            # from pristine defaults. protenix reads sys.argv[1:], so the
+            # argument list below is the same either way.
             inference_argv = [
-                "protenix_inference",
+                sys.executable,
+                os.path.join(protenix_root, "runner", "inference.py"),
                 "--model_name", protenix_model_name,
                 "--seeds", seed,
                 "--dump_dir", result_root,
@@ -241,13 +252,14 @@ def structure_prediction(args):
                 else:
                     inference_argv += ["--sample_diffusion.guidance.enable", "true"]
 
-            old_argv = sys.argv
-            sys.argv = inference_argv
-            try:
-                with log_stream(log):
-                    protenix_run()
-            finally:
-                sys.argv = old_argv
+            # protenix imports `configs` / `protenix` / `runner` as top-level
+            # packages from its own root, which running the script by path does
+            # not put on the path.
+            env = dict(os.environ)
+            env["PYTHONPATH"] = os.pathsep.join(
+                p for p in (protenix_root, env.get("PYTHONPATH")) if p
+            )
+            run_logged(inference_argv, log, env=env)
 
             # Confidence scoring
             protenix_output = f"{result_root}/{target_name}"
