@@ -1,7 +1,11 @@
 import argparse, yaml, os, glob, sys
 from datetime import datetime
 
+from thalkak import get_logger, log_stream
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+log = get_logger("structure")
 
 # Protenix ships several model generations; Thal-Kak exposes two of them as
 # separate structure methods. protenix_v1 runs a v1-generation checkpoint
@@ -42,14 +46,23 @@ def _download_protenix_v2(checkpoint_path):
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
     tmp_path = checkpoint_path + ".download"
 
-    def _progress(block_num, block_size, total_size):
-        if total_size > 0:
-            pct = min(100.0, block_num * block_size * 100.0 / total_size)
-            print(f"\r  downloading protenix-v2.pt ... {pct:5.1f}%", end="", flush=True)
+    # urlretrieve fires the hook once per block (thousands of times); log at
+    # 10% steps so the download leaves a handful of lines, not a flood.
+    logged_pct = 0
 
-    print(f"protenix-v2 checkpoint not found; downloading from mirror to {checkpoint_path}")
+    def _progress(block_num, block_size, total_size):
+        nonlocal logged_pct
+        if total_size <= 0:
+            return
+        pct = min(100.0, block_num * block_size * 100.0 / total_size)
+        if pct >= logged_pct + 10:
+            logged_pct = int(pct) // 10 * 10
+            log.info(f"  downloading protenix-v2.pt ... {logged_pct}%")
+
+    log.info(
+        f"protenix-v2 checkpoint not found; downloading from mirror to {checkpoint_path}"
+    )
     urllib.request.urlretrieve(_PROTENIX_V2_MIRROR_URL, tmp_path, reporthook=_progress)
-    print()
 
     digest = _sha256_of(tmp_path)
     if digest != _PROTENIX_V2_SHA256:
@@ -59,7 +72,7 @@ def _download_protenix_v2(checkpoint_path):
             f"expected {_PROTENIX_V2_SHA256}); refusing to use it."
         )
     os.replace(tmp_path, checkpoint_path)
-    print("protenix-v2 checkpoint verified (SHA-256 match).")
+    log.info("protenix-v2 checkpoint verified (SHA-256 match).")
 
 
 def _resolve_model_config(model, model_config):
@@ -96,14 +109,15 @@ def structure_prediction(args):
 
     match args.model:
         case "boltz2":
-            print("Running inference with Boltz2...")
+            log.info("Running inference with Boltz2...")
             from Structure.script.boltz.run_boltz import main as run_boltz
             from Structure.script.boltz.boltz_confidence import main as boltz_confidence
-            result_root = run_boltz(args.data_config, model_config)
-            boltz_confidence(result_root, target_name)
+            with log_stream(log):
+                result_root = run_boltz(args.data_config, model_config)
+                boltz_confidence(result_root, target_name)
 
         case "chai1":
-            print("Running inference with Chai-1...")
+            log.info("Running inference with Chai-1...")
             from Structure.script.chai.convert_yaml_to_json import convert_yaml_to_json
             from Structure.script.chai.run_chai import main as run_chai
             os.makedirs("temp/", exist_ok=True)
@@ -115,7 +129,8 @@ def structure_prediction(args):
             model_json_path = f"temp/{target_name}_{model_name}.json"
             convert_yaml_to_json(model_config, model_json_path)
 
-            result_root = run_chai(data_json_path, model_json_path)
+            with log_stream(log):
+                result_root = run_chai(data_json_path, model_json_path)
 
             # move json files to result directory and clean up temp
             os.rename(data_json_path, f"{result_root}/{target_name}.json")
@@ -126,9 +141,10 @@ def structure_prediction(args):
                 pass
 
         case "esmfold2":
-            print("Running inference with ESMFold2...")
+            log.info("Running inference with ESMFold2...")
             from Structure.script.esmfold2.run_esmfold2 import main as run_esmfold2
-            result_root = run_esmfold2(args.data_config, model_config)
+            with log_stream(log):
+                result_root = run_esmfold2(args.data_config, model_config)
 
         case "protenix_v1" | "protenix_v2":
             with open(model_config) as f:
@@ -142,7 +158,7 @@ def structure_prediction(args):
                     "protenix_v2 option. Remove it from the protenix_v1 "
                     "section of the model config."
                 )
-            print(f"Running inference with Protenix ({protenix_model_name})...")
+            log.info(f"Running inference with Protenix ({protenix_model_name})...")
             protenix_root = f"{ROOT}/Structure/submodules/protenix"
             seed = data_yaml["seed"]
             seed = ",".join(map(str, seed if isinstance(seed, list) else [seed]))
@@ -162,14 +178,15 @@ def structure_prediction(args):
             from Structure.script.protenix.process_msa_to_json import main as protenix_msa_to_json
             from Structure.script.protenix.protenix_confidence import process_protenix_results
 
-            protenix_msa_to_json(
-                Namespace(
-                    data=args.data_config,
-                    protenix=model_config,
-                    save_path=result_root,
-                    name=target_name,
+            with log_stream(log):
+                protenix_msa_to_json(
+                    Namespace(
+                        data=args.data_config,
+                        protenix=model_config,
+                        save_path=result_root,
+                        name=target_name,
+                    )
                 )
-            )
 
             if protenix_root not in sys.path:
                 sys.path.insert(0, protenix_root)
@@ -218,20 +235,24 @@ def structure_prediction(args):
                 total_chains = sum(e.get("copy", 1) for e in data_yaml.get("a3m") or [])
                 total_chains += sum(l.get("copy", 1) for l in data_yaml.get("ligand") or [])
                 if total_chains == 1:
-                    print("Skipping TFG: monomer input triggers protenix VinaSteric bug.")
+                    log.info(
+                        "Skipping TFG: monomer input triggers protenix VinaSteric bug."
+                    )
                 else:
                     inference_argv += ["--sample_diffusion.guidance.enable", "true"]
 
             old_argv = sys.argv
             sys.argv = inference_argv
             try:
-                protenix_run()
+                with log_stream(log):
+                    protenix_run()
             finally:
                 sys.argv = old_argv
 
             # Confidence scoring
             protenix_output = f"{result_root}/{target_name}"
-            process_protenix_results(protenix_output, job_name, args.model)
+            with log_stream(log):
+                process_protenix_results(protenix_output, job_name, args.model)
 
             # copy to common
             for file in glob.glob(f"{protenix_output}/seed_*/predictions/*.pdb"):
@@ -256,6 +277,9 @@ def structure_prediction(args):
 
 
 if __name__ == "__main__":
+    from thalkak import setup_logging
+
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model",
