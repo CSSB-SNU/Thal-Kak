@@ -237,17 +237,12 @@ The one exception is `envhog`, which is upstream's own HH-suite build; its entry
 says so. (The full BFD in HH-suite format is upstream's too, but we do not
 publish it at all - see the next section.) Several of these archives also cover
 fewer clusters than the MMseqs2 database they were built from; each entry's
-`Changes` field says whether entries were excluded. The tools, flags and
-per-database thresholds behind all of this are in install/README.md, under "How
-these databases were built".
+`Changes` field says whether entries were excluded.
 
 One thing this notice does NOT do is license the output of the pipeline. An
 alignment or a template file produced by a run contains material taken from
 whichever databases you searched, so the Apache-2.0 license on this repository's
-code does not carry over to it - and we make no claim over it either. If you
-intend to redistribute alignments, check the terms of the databases you built
-them from, in particular the two CC BY-SA 4.0 archives and the Logan family,
-which carries no grant at all.
+code does not carry over to it - and we make no claim over it either.
 
 Everything below is provided AS IS, WITHOUT WARRANTY OF ANY KIND, either by the
 upstream provider or by us, and without any representation that it is fit for a
@@ -375,8 +370,7 @@ particular purpose.
                  MMseqs2 expandable-profile database. `.idx` not shipped.
                  hhblits: converted here from that MMseqs2 database, and
                  entries WERE excluded - clusters holding fewer than 3
-                 sequences are absent, which is most of them. See
-                 install/README.md for the measured coverage.
+                 sequences are absent, which is most of them.
 
 5. EnVhogDB
      Produces    mmseqs/envhog_std, hhblits/envhog
@@ -440,8 +434,7 @@ particular purpose.
                  hhblits: converted here from that MMseqs2 database, and
                  entries WERE excluded from both Logan HH-suite archives -
                  clusters holding fewer than 3 sequences are absent, which is
-                 the great majority. See install/README.md for the measured
-                 coverage.
+                 the great majority.
      Naming      "human" means the annotated organism of the source SRA
                  accession is taxid 9606, not that the sequences are of human
                  origin; upstream warns these accessions also carry
@@ -535,8 +528,7 @@ is governed by the upstream license.
                 Sweeney B. Rfam 15: RNA families database in 2025. Nucleic
                 Acids Res 53(D1), D258-D267 (2025). doi:10.1093/nar/gkae1023
     Local build The installer clusters the sequences and builds search indexes,
-                so what you end up with is a derivative you made. The exact
-                thresholds are in install/README.md.
+                so what you end up with is a derivative you made.
     Note        The script tracks the CURRENT release, so the version you get
                 is the version published on the day you run it.
 

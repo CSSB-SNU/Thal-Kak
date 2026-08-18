@@ -131,9 +131,9 @@ check_space() {
 }
 
 plan_and_preflight() {
-    local sum_archive=0 sum_raw=0 sum_idx=0 n_rows=0
+    local sum_archive=0 sum_raw=0 sum_idx=0 max_work=0 n_rows=0
     local unknown_idx=() already=()
-    local entry fam row key archive ab rb ib idxcol need
+    local entry fam row key archive ab rb ib wb idxcol need archive_need
     declare -A need_by_fam=()
 
     INSTALL_PLAN=()
@@ -151,8 +151,14 @@ plan_and_preflight() {
 
         ab=$(manifest_field "$row" $F_ABYTES); rb=$(manifest_field "$row" $F_RBYTES)
         ib=$(manifest_field "$row" $F_IBYTES); idxcol=$(manifest_field "$row" $F_INDEX)
+        wb=$(manifest_field "$row" $F_WBYTES)
         [[ "$ab" == "-" ]] && ab=0
         [[ "$rb" == "-" ]] && rb=0
+        [[ "$wb" == "-" ]] && wb=0
+        # A work_bytes row is clustered, not unpacked: the work dir is built
+        # under ARCHIVE_DIR and removed when that database finishes, so the
+        # peak it adds is the largest single one, not the sum.
+        [[ "$wb" -le "$max_work" ]] || max_work=$wb
         sum_raw=$(( sum_raw + rb ))
         need_by_fam["$fam"]=$(( ${need_by_fam["$fam"]:-0} + rb ))
         if [[ ! -f "$ARCHIVE_DIR/$fam/$archive" ]]; then
@@ -181,16 +187,18 @@ plan_and_preflight() {
 
     [[ ${#already[@]} -eq 0 ]] || log "already installed (not counted below): ${already[*]}"
 
-    need=$(( sum_raw + sum_idx + sum_archive ))
+    archive_need=$(( sum_archive + max_work ))
+    need=$(( sum_raw + sum_idx + archive_need ))
 
     log "plan: $n_rows database(s)"
     log "  download   $(human "$sum_archive")"
     log "  extracted  $(human "$sum_raw")"
     log "  index      $(human "$sum_idx")$([[ ${#unknown_idx[@]} -gt 0 ]] && echo "  + unmeasured: ${unknown_idx[*]}")"
+    [[ $max_work -eq 0 ]] || log "  work set   $(human "$max_work")  (clustering scratch under $ARCHIVE_DIR, removed after)"
     log "  peak need  $(human "$need")"
 
     local short=() dest fam_need
-    [[ $sum_archive -eq 0 ]] || check_space archives "$ARCHIVE_DIR" "$sum_archive" || short+=("archives")
+    [[ $archive_need -eq 0 ]] || check_space archives "$ARCHIVE_DIR" "$archive_need" || short+=("archives")
     for fam in "${FAMILIES[@]}"; do
         fam_need=${need_by_fam["$fam"]:-0}
         [[ $fam_need -gt 0 ]] || continue
@@ -203,19 +211,6 @@ plan_and_preflight() {
         warn "no measured index size for: ${unknown_idx[*]}
          The peak figure above is therefore a LOWER bound."
     fi
-
-    for entry in "${INSTALL_PLAN[@]}"; do
-        row=${entry#*$'\t'}
-        [[ "${entry%%$'\t'*}" == "rna" && "$(manifest_field "$row" $F_URL)" != "-" ]] || continue
-        warn "the RNA databases are CLUSTERED here, not unpacked, and the figures above
-         do not include the working set mmseqs needs for that -- roughly the
-         decompressed input again, about 33 GB for RNAcentral. It is written
-         under $ARCHIVE_DIR/rna and removed afterwards.
-         The sequences come from EBI's CURRENT release, so what you build is
-         what they publish today; that is not the same database anyone who
-         built it on another day has."
-        break
-    done
 
     if [[ ${#short[@]} -gt 0 ]]; then
         fatal "not enough space for: ${short[*]}   (marked SHORT above)

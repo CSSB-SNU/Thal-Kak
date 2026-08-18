@@ -35,6 +35,17 @@ RNA chain against nothing.
 `db_mapping` / `db_taxonomy` sidecars, because the HH-suite UniRef100 carries no
 taxonomy and pairing is delegated to mmseqs.
 
+**`install_db.sh` repairs the hhblits `uniref100_2026_01` index as it installs.**
+Nine of its cs219 prefilter records came out of the original build empty — zero
+column states. hhblits scans every cs219 record on every search, so those nine put
+an error line in every log and make it die with SIGSEGV on short queries: a crash,
+not a worse alignment, and non-monotonic in query length, so no guard on the
+caller's side avoids it. The installer removes those nine entries. They held no
+usable profile in the first place, so nothing that worked is given up — what goes
+away is the crash. The other 39,312,371 clusters and all of the a3m and hhm data
+are untouched. A copy that is already on disk is repaired the same way on a
+re-run, and one that is already repaired is left alone.
+
 ## Installed size on disk
 
 Every database `install_db.sh` can install. Figures are `du -sb` measurements of a

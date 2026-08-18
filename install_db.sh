@@ -317,6 +317,10 @@ for entry in "${INSTALL_PLAN[@]}"; do
         install_taxonomy_overlay "$target"
     fi
 
+    if [[ "$fam" == "hhblits" && "$key" == "uniref100_2026_01" ]]; then
+        prune_empty_cs219 "$target"
+    fi
+
     INSTALLED+=("$fam/$key")
     log
 done

@@ -85,6 +85,44 @@ install_taxonomy_overlay() {
     info "multimer pairing now uses the 2025-08-04 taxonomy; the .idx needs no rebuild"
 }
 
+CS219_MAX_EMPTY_LEN=1
+CS219_KNOWN_EMPTY=9
+
+prune_empty_cs219() {
+    local dir=$1
+    local idx="$dir/db_cs219.ffindex"
+    local n_bad before after ids tmp
+
+    [[ -f "$idx" ]] || fatal "no db_cs219.ffindex at $dir"
+
+    IFS=$'\t' read -r n_bad before ids < <(awk -F'\t' -v m="$CS219_MAX_EMPTY_LEN" '
+        $3+0 <= m { n++; ids = ids " " $1 }
+        END { printf "%d\t%d\t%s\n", n+0, NR, ids }' "$idx")
+
+    if [[ "$n_bad" -eq 0 ]]; then
+        info "cs219: no empty records"
+        return 0
+    fi
+
+    [[ "$n_bad" -eq "$CS219_KNOWN_EMPTY" ]] \
+        || warn "cs219 carries $n_bad empty records, not the $CS219_KNOWN_EMPTY this build is
+         known for. All of them are dropped, but the extra ones are unaccounted for."
+
+    tmp="$idx.prune.$$"
+    awk -F'\t' -v m="$CS219_MAX_EMPTY_LEN" '$3+0 > m' "$idx" >"$tmp" \
+        || { rm -f "$tmp"; fatal "cannot rewrite db_cs219.ffindex — nothing was changed"; }
+
+    after=$(wc -l <"$tmp")
+    if [[ $(( before - after )) -ne "$n_bad" ]]; then
+        rm -f "$tmp"
+        fatal "the rewrite drops $(( before - after )) records, not $n_bad. Nothing was changed."
+    fi
+
+    mv "$tmp" "$idx" || { rm -f "$tmp"; fatal "cannot replace db_cs219.ffindex"; }
+    info "cs219: $before -> $after records, dropped$ids"
+    info "those ids are unsearchable now; their a3m and hhm records are untouched"
+}
+
 cluster_memory_limit() {
     local mb=${SLURM_MEM_PER_NODE:-}
     if [[ -z "$mb" && -n "${SLURM_MEM_PER_CPU:-}" && -n "${SLURM_CPUS_PER_TASK:-}" ]]; then

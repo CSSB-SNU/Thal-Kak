@@ -1,9 +1,9 @@
 #!/bin/bash
 
 F_FAMILY=1 F_KEY=2 F_STEM=3 F_ARCHIVE=4 F_URL=5 F_SHA=6
-F_ABYTES=7 F_RBYTES=8 F_IBYTES=9 F_INDEX=10
+F_ABYTES=7 F_RBYTES=8 F_IBYTES=9 F_WBYTES=10 F_INDEX=11
 
-MANIFEST_FIELDS=10
+MANIFEST_FIELDS=11
 
 read_rows() {
     local family=$1
@@ -29,7 +29,7 @@ validate_manifest() {
     [[ -z "$bad" ]] || fatal "$MANIFEST has malformed row(s):
 $bad
   Columns are tab-separated and read by position:
-    family key stem archive url sha256 archive_bytes raw_bytes idx_bytes index
+    family key stem archive url sha256 archive_bytes raw_bytes idx_bytes work_bytes index
   The url is the only place an archive is fetched from, so every row names both.
   A database we do not publish has no row at all."
 }
