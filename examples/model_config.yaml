@@ -66,3 +66,4 @@ esmfold2:
   tf32: true             # TF32 on fp32 matmuls -- matches the ESMFold2 paper's inference config
   chunk_size: null       # int|null -- tile L^2 transients (memory, for large complexes); can cost speed
   offload_lm: true       # park ESM-C on CPU during folding (memory; no result change)
+  confidence_chunk:      # int|null -- run the confidence head over N diffusion samples at a time; that head, not the trunk, sets the memory peak (it replicates an (S,L,L,d_pair) tensor). Equivalent maths, but the smaller batch shifts scores within float noise. Single-protein inference only; null = off

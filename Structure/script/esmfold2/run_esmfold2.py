@@ -48,6 +48,8 @@ from transformers.models.esmfold2.modeling_esmfold2 import ESMFold2Model
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:  # sibling imports when run as a script
+    sys.path.insert(0, SCRIPT_DIR)
 COMMON_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "common")
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
@@ -164,15 +166,21 @@ def _configure_acceleration(model, esm_cfg: dict):
       -- the memory lever for large complexes. int | null.
     - ``offload_lm``: park the ESM-C backbone on CPU during folding;
       numerically identical.
+    - ``confidence_chunk``: run the confidence head over this many diffusion
+      samples at a time instead of all at once -- the head, not the trunk, sets
+      the memory peak. Mathematically equivalent, but the smaller batch reorders
+      float reductions, so scores move within noise. int | null.
 
-    Returns ``(label, offloader)``; keep ``offloader`` alive for the whole
-    folding loop (its forward hooks stay installed until GC / ``remove()``).
+    Returns ``(label, keepalive)``; keep ``keepalive`` alive for the whole
+    folding loop (the offloader's forward hooks stay installed until GC /
+    ``remove()``, and the confidence patch until its revert thunk is dropped).
     """
     tf32 = bool(esm_cfg.get("tf32", False))
     kernel_backend = esm_cfg.get("kernel_backend", None)
     cueq_msa = bool(esm_cfg.get("cueq_msa", False))
     chunk_size = esm_cfg.get("chunk_size", None)
     offload_lm = bool(esm_cfg.get("offload_lm", False))
+    confidence_chunk = esm_cfg.get("confidence_chunk", None)
 
     # Kernel backends (cuequivariance / fused) use Triton kernels that need
     # native bf16 -- compute capability >= 8.0 (Ampere+). On older GPUs (e.g.
@@ -224,7 +232,17 @@ def _configure_acceleration(model, esm_cfg: dict):
         if offloader.active:
             parts.append("offload_lm")
 
-    return (", ".join(parts) if parts else "reference (pure-pytorch)"), offloader
+    revert_confidence = None
+    if confidence_chunk is not None and int(confidence_chunk) >= 1:
+        from chunk_confidence import install_chunked_confidence
+
+        revert_confidence = install_chunked_confidence(model, int(confidence_chunk))
+        parts.append(f"confidence_chunk={int(confidence_chunk)}")
+
+    return (
+        ", ".join(parts) if parts else "reference (pure-pytorch)",
+        (offloader, revert_confidence),
+    )
 
 
 
@@ -469,7 +487,9 @@ def main(data_yaml_path, esm_yaml_path):
 
     print(f"[esmfold2] loading {model_variant} ...", flush=True)
     model = ESMFold2Model.from_pretrained(model_variant).cuda().eval()
-    accel_label, _offloader = _configure_acceleration(model, esm_cfg)
+    # Held for the whole folding loop: the offloader's hooks and the
+    # confidence-head patch stay in place only while this is alive.
+    accel_label, _accel_keepalive = _configure_acceleration(model, esm_cfg)
     print(f"[esmfold2] acceleration: {accel_label}", flush=True)
     builder = ESMFold2InputBuilder()
 

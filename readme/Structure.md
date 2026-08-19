@@ -300,9 +300,26 @@ use_msa: bool               # only the full variant consumes MSA; false (or -Fas
 num_loops: int              # trunk refinement iterations
 num_sampling_steps: int     # diffusion sampling steps per sample
 num_diffusion_samples: int  # samples produced per seed (each becomes one PDB)
+msa_max_depth: int | null   # per-loop MSA row subsampling; null disables it
+msa_column_mask_rate: float # MSA column masking; 0.0 disables it
 ```
 
-**Note:** ESMFold2 is language-model based. The `-Fast` variant (or `use_msa: false`) runs MSA-free. Argument names match `esm.ESMFold2InputBuilder.fold()` / `ESMFold2Model.forward()`.
+These names match `esm.ESMFold2InputBuilder.fold()` / `ESMFold2Model.forward()`. The keys below do not: they are levers this runner applies to the loaded model, and each is off when absent.
+
+```yaml
+tf32: bool                  # TF32 on the fp32 matmul path (speed; changes numerics)
+kernel_backend: str | null  # "cuequivariance" | "fused" -- trunk kernel path (speed; changes numerics)
+cueq_msa: bool              # route the MSA encoder's trimul through cueq too (needs kernel_backend: cuequivariance)
+chunk_size: int | null      # tile L^2 transients in the trunk (memory; can cost speed)
+offload_lm: bool            # park the ESM-C backbone on CPU during folding (memory; no result change)
+confidence_chunk: int | null # run the confidence head N diffusion samples at a time (memory)
+```
+
+`kernel_backend` and `chunk_size` call the model's own `set_kernel_backend()` / `set_chunk_size()`. The rest are this runner's: `tf32` is a PyTorch global, `cueq_msa` reaches the MSA encoder that `set_kernel_backend()` does not, and `offload_lm` / `confidence_chunk` install and remove their own hooks around the fold.
+
+**`confidence_chunk`**: the confidence head, not the trunk, sets ESMFold2's memory peak — it replicates the pair representation to `(num_diffusion_samples, L, L, d_pair)` and runs a folding trunk over it, so the peak grows with the sample count. Everything after that replication is independent per sample, so the head can run in chunks and have its per-sample outputs concatenated. Set it to 1 (or another divisor of `num_diffusion_samples`) when a large complex runs out of memory. It applies to single-protein inference only; other call shapes pass through unchanged. Chunking is mathematically equivalent, but running the head on a smaller batch reorders float reductions, so scores shift within noise (measured on T1201 at `num_diffusion_samples: 4` with tf32 + cuequivariance: ranking_score by <= 1e-4, mean_plddt by <= 0.06, ranking order unchanged).
+
+**Note:** ESMFold2 is language-model based. The `-Fast` variant (or `use_msa: false`) runs MSA-free. Kernel backends need compute capability >= 8.0 (bf16); on an older GPU the runner reports this and falls back to the pure-PyTorch path.
 
 </details>
 

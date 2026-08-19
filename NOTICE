@@ -174,6 +174,27 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
           -min_prefilter_hits 1000, -p 20, -Z 500).
       No AlphaFold source is reproduced.
 
+12. ESMFold2 inference accelerators (CSSB, Seoul National University)
+     - Files:   Structure/script/esmfold2/chunk_confidence.py
+                Structure/script/esmfold2/run_esmfold2.py (the
+                _configure_acceleration / _set_msa_trimul_backend /
+                _LMOffloader helpers only)
+     - Source:  CSSB-SNU/esm (https://github.com/CSSB-SNU/esm), a fork of
+                Biohub/esm, scripts/chunk_confidence.py and
+                scripts/run_esmfold2.py
+     - License: MIT License, Copyright 2026 Chan Zuckerberg Biohub, Inc.
+                (inherited from the upstream the fork was taken from)
+     - These helpers reduce ESMFold2's inference memory, and are ported from
+       that fork rather than written here: routing
+       the MSA encoder's trimul blocks through a kernel backend that the model's
+       own set_kernel_backend() does not reach, parking the ESM-C backbone on
+       CPU during folding, and running the confidence head over chunks of
+       diffusion samples (the head replicates the pair representation per
+       sample, which sets the fold's memory peak). MODIFIED by CSSB Thal-Kak
+       (2026): each is driven by a key in this pipeline's ESMFold2 model config
+       rather than a command-line flag, and kernel backends are demoted to the
+       pure-PyTorch path on GPUs below compute capability 8.0.
+
 ================================================================================
 Third-party runtime dependencies (NOT redistributed; installed via pip/conda)
 ================================================================================
