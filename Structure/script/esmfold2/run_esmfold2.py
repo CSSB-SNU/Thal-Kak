@@ -151,6 +151,25 @@ class _LMOffloader:
             self.esmc.to(self.device)  # restore so the model is left as found
 
 
+def _set_msa_opm_chunk(model, chunk: int) -> int:
+    """Enable chunking on the MSA encoder's OuterProductMean. Returns #set.
+
+    OPM forms a [B, L, L, d_hidden, d_hidden] outer product -- O(L^2 * d_hidden^2),
+    the model's largest transient. It has a chunked path that tiles along the
+    i-axis, but ``model.set_chunk_size()`` never reaches ``msa_encoder``, so OPM
+    runs unchunked by default. Set it per block, as with the trimul backends.
+    """
+    msa = getattr(model, "msa_encoder", None)
+    n = 0
+    if msa is not None and hasattr(msa, "blocks"):
+        for blk in msa.blocks:
+            opm = getattr(blk, "outer_product_mean", None)
+            if opm is not None and hasattr(opm, "set_chunk_size"):
+                opm.set_chunk_size(chunk)
+                n += 1
+    return n
+
+
 def _configure_acceleration(model, esm_cfg: dict):
     """Apply optional inference accelerators from the config.
 
@@ -163,7 +182,10 @@ def _configure_acceleration(model, esm_cfg: dict):
     - ``cueq_msa``: also route the MSA encoder trimul through cueq (requires
       ``kernel_backend: cuequivariance``).
     - ``chunk_size``: cap L^2 transients (triangle / OPM / attention) by tiling
-      -- the memory lever for large complexes. int | null.
+      -- the memory lever for large complexes. int | null. Note this does not
+      reach the MSA encoder; see ``msa_opm_chunk``.
+    - ``msa_opm_chunk``: tile the MSA encoder's OuterProductMean, which
+      ``chunk_size`` leaves unchunked. int | null.
     - ``offload_lm``: park the ESM-C backbone on CPU during folding;
       numerically identical.
     - ``confidence_chunk``: run the confidence head over this many diffusion
@@ -181,6 +203,7 @@ def _configure_acceleration(model, esm_cfg: dict):
     chunk_size = esm_cfg.get("chunk_size", None)
     offload_lm = bool(esm_cfg.get("offload_lm", False))
     confidence_chunk = esm_cfg.get("confidence_chunk", None)
+    msa_opm_chunk = esm_cfg.get("msa_opm_chunk", None)
 
     # Kernel backends (cuequivariance / fused) use Triton kernels that need
     # native bf16 -- compute capability >= 8.0 (Ampere+). On older GPUs (e.g.
@@ -224,6 +247,11 @@ def _configure_acceleration(model, esm_cfg: dict):
     if chunk_size is not None:
         model.set_chunk_size(int(chunk_size))
         parts.append(f"chunk_size={int(chunk_size)}")
+
+    if msa_opm_chunk is not None:
+        n = _set_msa_opm_chunk(model, int(msa_opm_chunk))
+        if n:
+            parts.append(f"msa_opm_chunk={int(msa_opm_chunk)} x{n}")
 
     offloader = None
     if offload_lm:
