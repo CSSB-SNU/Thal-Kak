@@ -2,7 +2,6 @@ import argparse
 import io
 import json
 import os
-import sys
 import time
 import yaml
 import numpy as np
@@ -14,11 +13,6 @@ from pdbfixer import PDBFixer
 
 from ff_stack import make_forcefield
 from violations_torch import find_violations_torch
-
-# Shared pre-relaxation validators live one level up (Relax/script/validate.py);
-# reuse the sp2 carboxylate geometry so it has a single source of truth.
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from validate import sp2_oxt_position
 
 
 ENERGY = unit.kilocalories_per_mole
@@ -336,51 +330,6 @@ def _delete_water(fixer):
     print(f"  dropped {len(waters)} explicit water residue(s)")
 
 
-def _place_terminal_oxt(topology, positions, strain_cut=110.0):
-    """Reconstruct collapsed C-terminal OXT atoms at ideal sp2 geometry.
-
-    PDBFixer.addMissingAtoms() sometimes builds OXT on top of the backbone
-    carbonyl O for distorted termini, and the minimizer can't reliably reopen
-    that localized strain. For each strained OXT (O-C-OXT < ``strain_cut``) place
-    it as the sp2 third vertex (opposite the CA/O bisector, ~120deg). Well-placed
-    OXT atoms are left untouched.
-    """
-    C_OXT_BOND_NM = 0.125  # 1.25 A carboxylate C-O bond
-    coords = np.array(positions.value_in_unit(unit.nanometer), dtype=np.float64)
-    per_res = {}
-    for atom in topology.atoms():
-        if atom.name in ("CA", "C", "O", "OXT"):
-            per_res.setdefault(atom.residue.index, {})[atom.name] = atom.index
-
-    def _unit(v):
-        n = np.linalg.norm(v)
-        return v / n if n > 1e-8 else v
-
-    fixed = 0
-    for a in per_res.values():
-        if not {"CA", "C", "O", "OXT"} <= a.keys():
-            continue
-        C, O, CA, OXT = (coords[a[k]] for k in ("C", "O", "CA", "OXT"))
-        u_o = _unit(O - C)
-        u_oxt = _unit(OXT - C)
-        ang = np.degrees(np.arccos(np.clip(np.dot(u_o, u_oxt), -1.0, 1.0)))
-        if ang >= strain_cut:
-            continue  # already a sensible carboxylate; leave it
-        # sp2 third vertex, opposite the CA/O bisector -- shared geometry with the
-        # pre-relaxation validator (validate.sp2_oxt_position); bond in nm here.
-        coords[a["OXT"]] = sp2_oxt_position(C, O, CA, bond=C_OXT_BOND_NM)
-        fixed += 1
-
-    if fixed:
-        print(f"[oxt] reconstructed {fixed} collapsed C-terminal OXT atom(s) "
-              f"(O-C-OXT < {strain_cut:.0f}deg) to sp2 geometry")
-    new_positions = unit.Quantity(
-        [openmm.Vec3(float(x), float(y), float(z)) for x, y, z in coords],
-        unit.nanometer,
-    )
-    return new_positions
-
-
 def fix_pdb(pdb_fn):
     """PDBFixer clean-up that KEEPS heterogens (ligands/ions/glycans).
 
@@ -403,10 +352,6 @@ def fix_pdb(pdb_fn):
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(pH=7.0)
-
-    # Repair any C-terminal OXT that PDBFixer built collapsed onto the backbone
-    # O (see _place_terminal_oxt); the minimizer cannot reliably fix this later.
-    fixer.positions = _place_terminal_oxt(fixer.topology, fixer.positions)
 
     # keepIds=True preserves the input chain/resSeq through the round-trip (else
     # OpenMM renumbers to A../1..N), so pLDDT keys stay stable under residue
@@ -545,8 +490,8 @@ def build_system(topology, implicit_solvent, template_generators=None):
 def _strip_hydrogens(topology, positions):
     """Drop every hydrogen -> heavy-atom-only (topology, positions).
 
-    The relaxed structure is written heavy-atom-only, consistent with the
-    pyrosetta method's output.
+    Hydrogens exist only for the minimization (PDBFixer adds them); the output
+    stays heavy-atom-only like the decoys every other stage works with.
     """
     modeller = openmm_app.Modeller(topology, positions)
     hydrogens = [
@@ -913,7 +858,7 @@ def main():
     else:
         out_top, out_pos = pdb.topology, pdb.positions
 
-    # Heavy-atom-only output (drop hydrogens), consistent with the pyrosetta method.
+    # Heavy-atom-only output: drop the hydrogens added for minimization.
     out_top, out_pos = _strip_hydrogens(out_top, out_pos)
 
     buf = io.StringIO()
@@ -927,8 +872,8 @@ def main():
     with open(out_pdb, "w") as f:
         f.write(min_pdb_str)
 
-    # Energy reporting. A single minimization pass (no separate FastRelax step),
-    # so just initial vs final potential energy.
+    # Energy reporting: potential energy before the first pass and after the
+    # last one.
     E_init = float(einit_first)
     E_final = float(efinal)
     tool_tag = f"openmm_{effective_solvent}"

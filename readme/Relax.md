@@ -15,7 +15,7 @@ Structure  ──►  top-5 (top5/<job>/model_{1..5}.pdb)  ──►  [Relax]  �
 
 | Option | Behavior |
 |--------|----------|
-| `none` | Pass-through. Copies each `*.pdb` to `<decoy_dir>/relaxed/none/<name>_unrelaxed.pdb`. |
+| `none` | Pass-through. Copies each validated `*.pdb` to `<decoy_dir>/relaxed/none/<name>_unrelaxed.pdb` (no minimization). |
 | `openmm` | All-atom OpenMM minimization with the Amber-family force-field stack (`amber19-all` for protein/NA, GLYCAM_06j for glycans, GAFF-2.11 for ligands, monatomic ions) + implicit solvent (OBC2 default; GBn2 or vacuum selectable via the relax config, with automatic vacuum fallback when GB lacks radii). Every component is relaxed with its native force field; anything that can't be typed is frozen at its input coordinates rather than dropped. Writes `<name>_relaxed_openmm.pdb` plus per-decoy `<out_prefix>.energy.yaml` (`E_init` / `E_final`), merged into `energies.yaml`. |
 
 Both methods skip decoys whose output already exists, so re-running over a
@@ -23,21 +23,21 @@ partially-relaxed directory is cheap.
 
 ## Pre-relaxation validation
 
-Before `openmm` relaxes anything, the orchestrator runs
+Before either method runs, the orchestrator runs
 [`Relax/script/validate.py`](../Relax/script/validate.py) over every decoy and
-writes normalized copies into a scratch directory; the relax step then reads
-those. This centralizes structural fixes so relaxation starts from chemically
-sane input:
+writes normalized copies into a scratch directory; both methods then read those.
+This centralizes structural fixes so relaxation starts from chemically sane
+input, and `none` hands the same normalized geometry downstream:
 
 - **Prochiral methyl naming** — Val `CG1`/`CG2` and Leu `CD1`/`CD2` (and their
-  attached H) are relabeled to a canonical handedness. Names only, no atoms move.
+  attached H) are relabeled to the standard PDB/IUPAC handedness. Names only, no
+  atoms move.
 - **C-terminal carboxylate** — the whole `-COO(-)` group (both C–O bonds, the
   ~120° angles, planarity) is validated and rebuilt to ideal sp2 geometry when
   distorted; missing `O`/`OXT` are created.
 
 The rewrite is text-level: B-factors, occupancies and residue numbering are
-preserved, so per-residue pLDDT keying is unaffected. `relax=none` is a
-pass-through and is not validated.
+preserved, so per-residue pLDDT keying is unaffected.
 
 ## Configuration (`--relax_config`)
 

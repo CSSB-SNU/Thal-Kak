@@ -173,23 +173,22 @@ def relaxation(decoy_dir, relax_method, relax_config=None, ligand_specs=None):
     # so every path below sees them as ordinary *.pdb inputs.
     convert_cif_decoys(decoy_dir)
 
-    # Pre-relaxation validation: normalize inputs once for the actual relax
-    # methods into a scratch dir removed after the batch (see the finally below).
-    # `none` is a pass-through of the original structure, so it is left untouched.
-    src_dir = decoy_dir
-    staging = None
-    if relax_method == "openmm":
-        staging = tempfile.mkdtemp(prefix="thalkak_validate_")
-        src_dir = _validate_decoys(decoy_dir, staging, log)
+    # Pre-relaxation validation: normalize inputs once into a scratch dir removed
+    # after the batch (see the finally below). Runs for every method, `none`
+    # included, so a passed-through decoy and a relaxed one carry the same
+    # normalized geometry and naming downstream.
+    staging = tempfile.mkdtemp(prefix="thalkak_validate_")
+    src_dir = _validate_decoys(decoy_dir, staging, log)
 
     try:
         match relax_method:
             case "none":
                 log.info("No relaxation.")
                 log.info(
-                    f"Copying unrelaxed structures from {decoy_dir} to relax directory..."
+                    f"Copying validated, unrelaxed structures from {src_dir} "
+                    f"to relax directory..."
                 )
-                decoys = glob.glob(os.path.join(decoy_dir, "*.pdb"))
+                decoys = glob.glob(os.path.join(src_dir, "*.pdb"))
                 for pdb in decoys:
                     out_prefix = os.path.join(
                         relax_dir,
@@ -253,8 +252,7 @@ def relaxation(decoy_dir, relax_method, relax_config=None, ligand_specs=None):
 
         return relax_dir
     finally:
-        if staging:
-            shutil.rmtree(staging, ignore_errors=True)
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 if __name__ == "__main__":

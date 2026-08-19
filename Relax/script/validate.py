@@ -6,10 +6,11 @@ structure instead of the relaxer re-deriving its own fixes. Two checks are
 performed here:
 
 1. ``canonicalize_prochiral_methyls`` — relabel Val ``CG1``/``CG2`` and Leu
-   ``CD1``/``CD2`` (and their attached H) to Rosetta ``fa_standard`` handedness.
-   The methyls are prochiral, so a predictor may emit either labeling; Rosetta's
-   ``cart_bonded`` improper term penalizes the non-canonical one. Name
-   unification only — no coordinates move.
+   ``CD1``/``CD2`` (and their attached H) to the standard PDB/IUPAC handedness.
+   The methyls are prochiral, so a predictor may emit either labeling; unifying
+   them keeps anything keyed on atom names (per-atom RMSD, atom-name-keyed
+   scoring) from comparing swapped branches. Name unification only — no
+   coordinates move.
 
 2. ``fix_terminal_carboxylate`` — validate the whole protein C-terminal
    ``-COO(-)`` group (both C-O bonds, all three ~120deg angles, planarity), not
@@ -23,9 +24,7 @@ This is a pure text-level PDB rewrite: only coordinates and atom names/lines
 change. B-factors, occupancies and residue numbering are preserved, so the
 downstream per-residue pLDDT keying (CA/C1' B-factor) is unaffected.
 
-The only heavy dependency is PyRosetta, imported lazily and used solely to read
-the canonical methyl handedness from ``fa_standard``; if it is unavailable the
-methyl step is skipped with a warning (the C-terminal fix is dependency-free).
+Standard library only -- no third-party dependencies.
 
 CLI::
 
@@ -126,14 +125,6 @@ def _sp2_third_vertex(C, p1, p2, bond):
     )
 
 
-def sp2_oxt_position(C, O, CA, bond=CARBOXYLATE_BOND):
-    """Ideal sp2 position of the terminal OXT given the backbone O and CA (both
-    kept where they are): the third carboxyl-carbon bond, ~120deg from C-O and
-    C-CA. Public because the OpenMM relaxer's post-PDBFixer OXT safety net reuses
-    it (``bond`` in nm there, A here)."""
-    return _sp2_third_vertex(C, O, CA, bond)
-
-
 def _rebuild_coo_from_backbone(C, CA, N, bond=CARBOXYLATE_BOND):
     """Both carboxylate oxygens as an ideal planar sp2 -COO-, used when neither
     input oxygen can be trusted as a reference. They are placed symmetric about
@@ -196,42 +187,12 @@ def _res_key(line):
 
 
 # --- 1. prochiral methyl name canonicalization --------------------------------
-_CANON_SIGNS = None  # {resn: +1/-1}, computed once from fa_standard (lazy)
-
-
-def _canonical_signs():
-    """Canonical signed-volume sign per prochiral residue, read once from
-    PyRosetta's ``fa_standard`` ideal residues. Returns {} (methyl step becomes a
-    no-op) if PyRosetta cannot be imported/initialised."""
-    global _CANON_SIGNS
-    if _CANON_SIGNS is not None:
-        return _CANON_SIGNS
-    try:
-        import pyrosetta
-    except Exception as e:  # noqa: BLE001 - any import failure -> skip gracefully
-        print(f"[validate] PyRosetta unavailable ({e}); skipping methyl canonicalization")
-        _CANON_SIGNS = {}
-        return _CANON_SIGNS
-
-    opts = "-mute all -load_PDB_components false"
-    try:
-        pyrosetta.init(opts, silent=True)
-    except TypeError:
-        pyrosetta.init(opts)
-
-    rosetta = pyrosetta.rosetta
-    rts = rosetta.core.chemical.ChemicalManager.get_instance().residue_type_set(
-        "fa_standard"
-    )
-    signs = {}
-    for resn, (c, r, a, b) in METHYLS.items():
-        res = rosetta.core.conformation.ResidueFactory.create_residue(
-            rts.name_map(resn)
-        )
-        xyz = {nm: (res.xyz(nm).x, res.xyz(nm).y, res.xyz(nm).z) for nm in (c, r, a, b)}
-        signs[resn] = 1 if signed_volume(xyz[c], xyz[r], xyz[a], xyz[b]) > 0 else -1
-    _CANON_SIGNS = signs
-    return signs
+# Canonical signed-volume sign per prochiral residue. Fixed by L-amino-acid
+# stereochemistry plus the standard PDB/IUPAC methyl numbering, and chi-invariant
+# (see signed_volume), so it is a constant rather than something to look up at
+# runtime. Matches Amber's ideal residues (all_amino94.lib: VAL -2.7302, LEU
+# -2.7302).
+CANON_SIGNS = {"VAL": -1, "LEU": -1}
 
 
 def _swap_methyl_name(resn, name):
@@ -260,10 +221,9 @@ def _swap_methyl_name(resn, name):
 
 
 def canonicalize_prochiral_methyls(lines):
-    """Relabel non-canonical Val/Leu methyl pairs to fa_standard handedness.
+    """Relabel non-canonical Val/Leu methyl pairs to the canonical handedness.
     Returns (new_lines, n_residues_relabeled)."""
-    # Gather the four reference atoms of every prochiral residue first, so a
-    # structure with no Val/Leu never pays the PyRosetta init cost.
+    # Gather the four reference atoms of every prochiral residue first.
     residues = {}
     for ln in lines:
         if not _is_atom(ln):
@@ -278,10 +238,6 @@ def canonicalize_prochiral_methyls(lines):
     if not residues:
         return lines, 0
 
-    signs = _canonical_signs()
-    if not signs:
-        return lines, 0
-
     # Flag residues whose observed handedness disagrees with the canonical sign.
     to_swap = set()
     for key, atoms in residues.items():
@@ -289,7 +245,7 @@ def canonicalize_prochiral_methyls(lines):
         if not all(nm in atoms for nm in (c, r, a, b)):
             continue  # incomplete side chain -- the relaxer rebuilds it anyway
         v = signed_volume(atoms[c], atoms[r], atoms[a], atoms[b])
-        if (1 if v > 0 else -1) != signs[atoms["_resn"]]:
+        if (1 if v > 0 else -1) != CANON_SIGNS[atoms["_resn"]]:
             to_swap.add(key)
 
     if not to_swap:
