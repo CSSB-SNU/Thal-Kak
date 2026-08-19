@@ -182,10 +182,10 @@ These packages are imported at runtime and are NOT included in this
 repository. They are listed here for informational purposes only; their
 licenses govern the respective packages, not this work.
 
-   colabfold ............ MIT (trained weights under separate licenses)
+   colabfold ............ MIT (MSA + template search only)
    alphafold-colabfold .. Apache License 2.0
    boltz ................ MIT
-   esm (EvolutionaryScale / CZ Biohub) .. MIT (model weights may differ)
+   esm (Chan Zuckerberg Biohub) .. MIT
    transformers ......... Apache License 2.0
    openmm ............... LGPL-3.0-or-later (used for structure relaxation)
    pdbfixer ............. MIT
@@ -195,11 +195,9 @@ licenses govern the respective packages, not this work.
    hh-suite ............. GPL-3.0-or-later (invoked as a binary; MSA stage)
    hmmer ................ BSD-3-Clause (invoked as a binary; MSA/RNA stages)
 
-NOTE ON MODEL WEIGHTS: Trained model parameters (weights) for the structure
-predictors above are distributed by their respective providers under their own
-terms, which may be more restrictive than the code licenses listed here (e.g.,
-research/non-commercial use). Users are responsible for complying with the
-applicable weight licenses.
+Each backend downloads its own trained parameters on first run. They are not
+redistributed here, and their providers release them on the same terms as the
+corresponding code above.
 
 The Protenix "protenix-v2" checkpoint is not currently served by its official
 endpoint (which returns HTTP 403 for public requests). When the checkpoint is
