@@ -310,15 +310,14 @@ These names match `esm.ESMFold2InputBuilder.fold()` / `ESMFold2Model.forward()`.
 tf32: bool                  # TF32 on the fp32 matmul path (speed; changes numerics)
 kernel_backend: str | null  # "cuequivariance" | "fused" -- trunk kernel path (speed; changes numerics)
 cueq_msa: bool              # route the MSA encoder's trimul through cueq too (needs kernel_backend: cuequivariance)
-chunk_size: int | null      # tile L^2 transients in the trunk (memory; can cost speed)
-msa_opm_chunk: int | null   # tile the MSA encoder's OuterProductMean (memory), which chunk_size does not reach
+chunk_size: int | null      # tile L^2 transients, MSA encoder included (memory; can cost speed)
 offload_lm: bool            # park the ESM-C backbone on CPU during folding (memory; no result change)
 confidence_chunk: int | null # run the confidence head N diffusion samples at a time (memory)
 ```
 
-`kernel_backend` and `chunk_size` call the model's own `set_kernel_backend()` / `set_chunk_size()`. The rest are this runner's: `tf32` is a PyTorch global; `cueq_msa` and `msa_opm_chunk` reach into the MSA encoder, which neither `set_kernel_backend()` nor `set_chunk_size()` propagates to; and `offload_lm` / `confidence_chunk` install and remove their own hooks around the fold.
+`kernel_backend` and `chunk_size` call the model's own `set_kernel_backend()` / `set_chunk_size()`. The two do not cover the same modules: `set_chunk_size()` propagates into the MSA encoder, down to each block's `outer_product_mean`, while `set_kernel_backend()` stops at the folding trunk, LM encoder, coda and confidence head — `MSAEncoder` has no such method at all. `cueq_msa` exists to close that one gap; there is nothing equivalent to close for chunking.
 
-**`msa_opm_chunk`**: the MSA encoder's OuterProductMean builds a `[B, L, L, d_hidden, d_hidden]` outer product — the model's largest single transient. It has a chunked path that tiles along the i-axis, but the model never wires `set_chunk_size()` into the MSA encoder, so it runs unchunked whatever `chunk_size` is set to. Upstream uses 64.
+The rest are this runner's: `tf32` is a PyTorch global, and `offload_lm` / `confidence_chunk` install and remove their own hooks around the fold.
 
 **`confidence_chunk`**: the confidence head, not the trunk, sets ESMFold2's memory peak — it replicates the pair representation to `(num_diffusion_samples, L, L, d_pair)` and runs a folding trunk over it, so the peak grows with the sample count. Everything after that replication is independent per sample, so the head can run in chunks and have its per-sample outputs concatenated. Set it to 1 (or another divisor of `num_diffusion_samples`) when a large complex runs out of memory. It applies to single-protein inference only; other call shapes pass through unchanged. Chunking is mathematically equivalent, but running the head on a smaller batch reorders float reductions, so scores shift within noise (measured on T1201 at `num_diffusion_samples: 4` with tf32 + cuequivariance: ranking_score by <= 1e-4, mean_plddt by <= 0.06, ranking order unchanged).
 

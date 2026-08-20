@@ -187,10 +187,8 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      - These helpers reduce ESMFold2's inference memory, and are ported from
        that fork rather than written here: routing
        the MSA encoder's trimul blocks through a kernel backend that the model's
-       own set_kernel_backend() does not reach, tiling that encoder's
-       OuterProductMean, which set_chunk_size() likewise does not reach, parking
-       the ESM-C backbone on CPU during folding, and running the confidence head
-       over chunks of
+       own set_kernel_backend() does not reach, parking the ESM-C backbone on
+       CPU during folding, and running the confidence head over chunks of
        diffusion samples (the head replicates the pair representation per
        sample, which sets the fold's memory peak). MODIFIED by CSSB Thal-Kak
        (2026): each is driven by a key in this pipeline's ESMFold2 model config
