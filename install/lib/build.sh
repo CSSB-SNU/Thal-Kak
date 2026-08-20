@@ -133,12 +133,9 @@ build_rna_from_upstream() {
     info "decompressing $(basename "$archive")"
     gzip -dc "$archive" >"$fasta" || { rm -rf "$work"; fatal "cannot decompress $archive"; }
 
-    # The upstream build's own recipes, unchanged. A large explicit ceiling makes
-    # mmseqs plan to use it: rfam peaked at 168 GB with --threads 32 and died in
-    # mergeclusters with std::bad_alloc at --threads 96 (~528 GB). With no ceiling
-    # it clusters in ~3.5 min at 96 threads and returns identical cluster counts
-    # (10164372 -> 3257609 -> 1845676 -> 1805707). RNAcentral is the one that
-    # needs a ceiling, and 50G is the value the upstream build used.
+    # rfam dying in mergeclusters with std::bad_alloc is nondeterministic: switch it
+    # to easy-linclust here and re-run, which skips the second of easy-cluster's two
+    # mergeclusters calls at the cost of a coarser cluster set.
     case "$key" in
         rfam)       module=easy-cluster;  mem=""    ;;
         rnacentral) module=easy-linclust; mem="50G" ;;

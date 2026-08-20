@@ -184,13 +184,6 @@ verify_template_db() {
 build_index() {
     local dir=$1 mmseqs=$2 threads=$3; shift 3
     local marker="$dir/db.idx.ok"
-
-    # `createindex --split 0` writes ONE `db.idx` when the index fits in memory
-    # and numbered `db.idx.0..N` when it does not -- 506 GB of mgnify index on a
-    # 755 GB host splits into four. `db.idx.index` is written either way, and it
-    # is what db_registry.has_idx() reads, so it is the presence test here too.
-    # Checking `db.idx` alone rejects a split index that the pipeline would
-    # happily mmap, and then deletes it and rebuilds it to the same shape.
     if [[ -f "$marker" && ( -f "$dir/db.idx" || -f "$dir/db.idx.index" ) ]]; then
         info "index present (db.idx.ok)"
         return 0

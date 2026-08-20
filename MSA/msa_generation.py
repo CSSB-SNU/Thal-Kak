@@ -501,7 +501,7 @@ if __name__ == "__main__":
         "--msa",
         type=str,
         required=True,
-        choices=["colab", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"],
+        choices=["colab", "custom", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"],
         help="MSA engine. Other knobs live in the MSA config yaml "
         "(see --msa_config; default examples/msa_config.<mode>.yaml).",
     )
@@ -516,6 +516,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Stoichiometry information, e.g. 'A1' for one chain A",
+    )
+    parser.add_argument(
+        "--a3m_path",
+        type=str,
+        default=None,
+        help="ColabFold-format a3m to use as the protein MSA "
+        "(required by --msa custom; ignored by the other modes).",
     )
     parser.add_argument(
         "--output_dir",

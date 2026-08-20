@@ -49,20 +49,20 @@ re-run, and one that is already repaired is left alone.
 ## Installed size on disk
 
 Every database `install_db.sh` can install. Figures are `du -sb` measurements of a
-completed install (2026-08-14), not manifest estimates. Archives are deleted after a
+completed install (2026-08-19), not manifest estimates. Archives are deleted after a
 successful install and are not counted here.
 
 ### mmseqs db
 
 | Database | Installed |
 |---|---:|
-| `mgnify_clusters` | 682.6 GiB |
+| `mgnify_clusters` | 692.1 GiB |
 | `uniref100_2026_01` | 489.3 GiB |
 | `uniref30_2302` | 371.5 GiB |
 | `bfd_reduced` | 142.3 GiB |
 | `logan_human` | 102.0 GiB |
 | `envhog_std` | 90.3 GiB |
-| **Total (6)** | **1,878.0 GiB — 1.83 TiB** |
+| **Total (6)** | **1,887.5 GiB — 1.84 TiB** |
 
 ### hhsuite db
 
@@ -81,9 +81,9 @@ successful install and are not counted here.
 
 | Database | Installed |
 |---|---:|
-| `rnacentral` | 26.7 GiB |
+| `rnacentral` | 26.9 GiB |
 | `rfam` | 1.2 GiB |
-| **Total (2)** | **27.9 GiB** |
+| **Total (2)** | **28.1 GiB** |
 
 ### template db
 
@@ -92,15 +92,24 @@ successful install and are not counted here.
 | `BioMolDB_20260224` | 81.2 GiB |
 | **Total (1)** | **81.2 GiB** |
 
+These figures come from one host, and which of them reproduce depends on the host.
+
+- **The six mmseqs databases** are indexed with `mmseqs createindex --split 0`,
+  which splits the index into `db.idx.0 .. db.idx.N` when it does not fit in the
+  memory free at build time, so any of their figures can move by several GiB with
+  the split count.
+- **The two rna databases** are clustered from EBI's CURRENT releases, so their
+  size follows what EBI publishes on the day you build.
+
 ### All families
 
 | Family | Installed |
 |---|---:|
 | hhblits (7) | 3.47 TiB |
-| mmseqs (6) | 1.83 TiB |
+| mmseqs (6) | 1.84 TiB |
 | template (1) | 0.08 TiB |
 | rna (2) | 0.03 TiB |
-| **Total (16)** | **5.41 TiB** |
+| **Total (16)** | **5.42 TiB** |
 
 Peak usage during installation is higher than the final figure, because an archive sits
 on disk next to the tree it is being unpacked into. Installing one family at a time
