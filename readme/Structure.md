@@ -277,6 +277,7 @@ model_name: str           # Protenix checkpoint name, e.g. protenix_base_default
 N_cycle: int              # number of recycling iterations
 N_sample: int             # number of diffusion samples
 N_step: int               # diffusion steps per sample
+chunk_size: int | null    # Optional. Tile the pairformer and template stacks over N_token blocks (memory; can cost speed). null/omit = automatic
 data.msa.min_size.test: int | null   # Optional. MSA subsampling: null/omit = Protenix native per-recycle subsampling; set 16384 (featurization cap) to force full MSA (raw MSAs deeper than 16384 are truncated at featurization)
 ```
 
@@ -284,6 +285,8 @@ data.msa.min_size.test: int | null   # Optional. MSA subsampling: null/omit = Pr
 # protenix_v2 — same keys (model_name is e.g. protenix-v2), plus:
 use_tfg_guidance: bool    # enable Training-Free Guidance (TFG) sampling
 ```
+
+**`chunk_size`**: Protenix tiles its triangle operations over `N_token` blocks, which is what keeps the pair stacks in memory on a small GPU. Two details make the key less straightforward than it looks. Protenix's own dynamic sizing (`infer_setting.dynamic_chunk_size`, on by default) discards whatever `chunk_size` it is handed and picks from a threshold table that leaves everything up to 1024 tokens untiled, so Thal-Kak switches the dynamic path off whenever this key is set — setting a size without that has no effect. And below compute capability 8.0 (V100, T4) Protenix pins `dtype` to fp32 and both triangle kernels to the pure-PyTorch path whatever Thal-Kak requests, which is exactly where the untiled stacks stop fitting: the template embedder's attention logits are `[N_token, heads, N_token, N_token]`, 5.8 GB at 714 tokens in fp32, against the 15 GiB of a T4. `null` therefore means automatic — Protenix's own dynamic sizing at capability >= 8.0, and 128 below it.
 
 **`use_tfg_guidance`** (`protenix_v2` only): when `True`, the runner turns on Protenix's Training-Free Guidance pass, which refines diffusion sampling without retraining the model, at the cost of extra inference time per sample. Leave `False` for vanilla sampling. It is skipped automatically for single-chain inputs, which trip a Protenix bug in the steric potential. Putting this key in a `protenix_v1` section is an error rather than a silent no-op.
 

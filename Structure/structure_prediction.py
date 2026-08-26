@@ -239,6 +239,36 @@ def structure_prediction(args):
             if min_size_test is not None:
                 inference_argv += ["--data.msa.min_size.test", str(min_size_test)]
 
+            # Tiling the pairformer/template stacks. protenix's own dynamic
+            # chunking discards whatever chunk_size it is handed, and its
+            # threshold table leaves everything up to 1024 tokens untiled, so an
+            # explicit size only lands with the dynamic path switched off.
+            # Default to tiling below compute capability 8.0: inference.py pins
+            # dtype to fp32 and both triangle kernels to the pure-PyTorch path
+            # there, and the template embedder's attention logits are
+            # [N_token, heads, N_token, N_token] -- 5.8 GB at 714 tokens in
+            # fp32, which is what a 15 GiB T4 (the Colab default) runs out of.
+            chunk_size = protenix_yaml.get("chunk_size")
+            if chunk_size is None:
+                import torch
+
+                if (
+                    torch.cuda.is_available()
+                    and torch.cuda.get_device_capability()[0] < 8
+                ):
+                    cap = ".".join(map(str, torch.cuda.get_device_capability()))
+                    chunk_size = 128
+                    log.info(
+                        f"compute capability {cap} runs protenix in fp32 with "
+                        f"the pure-PyTorch triangle kernels; tiling at "
+                        f"chunk_size={chunk_size} to keep it in memory"
+                    )
+            if chunk_size is not None:
+                inference_argv += [
+                    "--infer_setting.dynamic_chunk_size", "false",
+                    "--infer_setting.chunk_size", str(chunk_size),
+                ]
+
             if protenix_yaml.get("use_tfg_guidance"):
                 # TFG's VinaStericPotential crashes on single-chain inputs:
                 # potentials.py:1206 calls a closure with 2 positional args that
