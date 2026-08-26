@@ -257,7 +257,7 @@ def structure_prediction(args):
                     and torch.cuda.get_device_capability()[0] < 8
                 ):
                     cap = ".".join(map(str, torch.cuda.get_device_capability()))
-                    chunk_size = 128
+                    chunk_size = 512
                     log.info(
                         f"compute capability {cap} runs protenix in fp32 with "
                         f"the pure-PyTorch triangle kernels; tiling at "
