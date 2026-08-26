@@ -526,8 +526,9 @@ def section(log, title, width=60):
 
 def _emit(log, level, line):
     """Log one line of external-tool output: keep only the final \\r-overwrite
-    (tqdm bars), strip trailing space, skip if blank."""
-    line = line.rsplit("\r", 1)[-1].rstrip()
+    (progress bars), strip trailing space, skip if blank. The line terminator
+    goes first so a CRLF ending isn't mistaken for an overwrite."""
+    line = line.rstrip("\r\n").rsplit("\r", 1)[-1].rstrip()
     if line:
         log.log(level, "%s", line)
 
@@ -539,8 +540,17 @@ def run_logged(cmd, log=None, check=True, **kw):
     shell = isinstance(cmd, str)
     log.info("$ %s", cmd if shell else " ".join(map(str, cmd)))
     proc = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, bufsize=1, **kw)
-    for line in proc.stdout:
+                            stderr=subprocess.STDOUT, **kw)
+    # Decode by hand rather than with text=True, for the newline="\n". A progress
+    # callback redraws with \r and no newline, and universal-newline mode counts
+    # every redraw as its own line -- protenix's urlretrieve hook fires once per
+    # block, so a single cache download is a few thousand of them. Naming \n as
+    # the only terminator hands each redraw burst to _emit as one line, which
+    # keeps just the last state. ("" would not do: it leaves universal newlines
+    # on and only stops the translation.) Popen takes no newline argument, hence
+    # the wrapper.
+    stream = io.TextIOWrapper(proc.stdout, errors="replace", newline="\n")
+    for line in stream:
         _emit(log, logging.INFO, line)
     code = proc.wait()
     if code:
