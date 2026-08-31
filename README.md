@@ -245,3 +245,15 @@ thalkak relax --decoy_dir <dir of decoy PDBs> --relax openmm
 
 Thal-Kak is Apache-2.0 ([LICENSE](LICENSE)); the vendored model code and the
 databases it installs carry their own terms, listed in [NOTICE](NOTICE).
+
+## Citation
+```
+@article{bae2026thal,
+  title={Thal-Kak: unifying biomolecular structure predictors reveals a sampling-selection gap},
+  author={Bae, Junhyeok and Jo, Soohyun and Kim, Yeajin and Kim, Dongyun and Kim, Kwanwook and Park, Sanghyun and Park, Sanggeun and Myung, Sojung and Shin, Hyunho and Kim, Min Hyeok and others},
+  journal={bioRxiv},
+  pages={2026--08},
+  year={2026},
+  publisher={Cold Spring Harbor Laboratory}
+}
+```
