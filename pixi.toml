@@ -58,6 +58,7 @@ dependency-overrides = { numpy = ">=2", gemmi = ">=0.7", tqdm = ">=4.67", matplo
 torch = "==2.7.1"
 torchvision = "==0.22.1"
 torchaudio = "==2.7.1"
+xformers = "==0.0.31.post1"  # ESM-C fused attention; pin to this torch build (newer needs torch 2.13)
 biopython = "==1.84"
 gemmi = "==0.7.5"
 pytorch-lightning = "==2.5.0"

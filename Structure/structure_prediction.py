@@ -98,6 +98,14 @@ def _resolve_model_config(model, model_config):
 
 
 def structure_prediction(args):
+    # Shared by every torch predictor (boltz/chai/esmfold2/protenix): expandable
+    # CUDA segments let the caching allocator grow/reuse one virtual arena
+    # instead of many fixed-size blocks, which cuts fragmentation OOMs at no cost
+    # to results. Set before any predictor imports torch or touches CUDA (the
+    # allocator reads it at the first allocation). setdefault so an explicit
+    # outer override still wins.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     with open(args.data_config) as f:
         data_yaml = yaml.safe_load(f)
     output_dir = data_yaml["output_dir"]
@@ -170,7 +178,6 @@ def structure_prediction(args):
             os.makedirs(common_dir)
 
             os.environ["PROTENIX_ROOT_DIR"] = protenix_root
-            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
             os.environ["TQDM_DISABLE"] = "1"
             os.environ["LAYERNORM_TYPE"] = "torch"
 

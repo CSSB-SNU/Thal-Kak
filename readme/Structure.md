@@ -192,7 +192,7 @@ The pipeline ships defaults in `examples/model_config.yaml` — one section per 
 
 ```yaml
 n_samples: int
-no_kernels: bool          # default: True. True disables Boltz's optimized (trifast) kernels; False uses them (faster / less memory, needs trifast installed)
+no_kernels: bool          # default: False, i.e. Boltz's fused triangle kernels (cuequivariance) are used. True falls back to the pure-PyTorch path, which is slower and needs more GPU memory on large targets
 output_format: str        # pdb | mmcif
 recycling_steps: int      # default: 3
 sampling_steps: int       # default: 200
@@ -217,7 +217,7 @@ Example:
 
 ```yaml
 n_samples: 5
-no_kernels: True
+no_kernels: False
 output_format: pdb
 recycling_steps: 3
 sampling_steps: 200

@@ -6,7 +6,7 @@
 
 boltz2:
   n_samples: 5
-  no_kernels: True
+  no_kernels: False   # True = non-kernel fallback (slower + more GPU memory on large targets)
   output_format: pdb
   recycling_steps: 3
   sampling_steps: 200
