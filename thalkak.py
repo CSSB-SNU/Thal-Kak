@@ -37,6 +37,7 @@ FULL_METHOD_FIELDS = [
     FullField("n_seed", False, 5, None),
     FullField("seed_start", False, 1, None),
     FullField("a3m_path", False, None, None),
+    FullField("template_path", False, None, None),
     FullField("msa_config", False, None, None),
     FullField("model_config", False, None, None),
     FullField("relax_config", False, None, None),
@@ -85,7 +86,26 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
             continue
         picked.append(candidate)
 
+    # Every predictor writes the same confidence columns into the summary read
+    # above, so key those rows by seed-sample and each pick can carry its own
+    # metrics into top5_dir. The monomer-only predictors leave iptm out.
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return v
+
+    metric_cols = ["ranking_score", "mean_plddt", "ptm", "iptm"]
+    summary_by_key = {
+        row["seed-sample"]: {
+            c: _num(row[c]) for c in metric_cols if row.get(c) not in (None, "")
+        }
+        for row in rows
+        if row.get("seed-sample")
+    }
+
     method_log = {"models": {}}
+    metric_rows = []  # per-pick confidence metrics -> top5_dir/metrics.csv
     for i, src in enumerate(picked, 1):
         shutil.copy(src, os.path.join(top5_dir, f"model_{i}.pdb"))
         entry = {}
@@ -97,10 +117,28 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
         if m:
             entry["seed"] = int(m.group(1))
             entry["sample"] = int(m.group(2))
+            metric_rows.append({
+                "model": f"model_{i}",
+                "seed": int(m.group(1)),
+                "sample": int(m.group(2)),
+                **summary_by_key.get(f"seed_{m.group(1)}_sample_{m.group(2)}", {}),
+            })
         method_log["models"][f"model_{i}"] = entry
 
     with open(os.path.join(top5_dir, "method_log.yaml"), "w") as f:
         yaml.dump(method_log, f, sort_keys=False)
+
+    # The picks' scores belong next to the picks, so relaxation and whatever
+    # reads top5_dir don't have to go back to the prediction directory.
+    if metric_rows:
+        with open(os.path.join(top5_dir, "metrics.csv"), "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["model", "seed", "sample"] + metric_cols,
+                extrasaction="ignore",
+            )
+            writer.writeheader()
+            writer.writerows(metric_rows)
 
     if len(picked) < 5:
         log.warning(
@@ -174,6 +212,14 @@ def full_args_from_input(input_path):
     if resolved["msa"] != "custom" and resolved["a3m_path"]:
         raise SystemExit(
             f"{input_path}: Method.a3m_path only applies to Method.msa = "
+            f"'custom', but msa is {resolved['msa']!r}."
+        )
+    # template_path is an optional companion to a3m_path (custom-only): it forces
+    # user-supplied templates in place of a search. Optional even for custom (an
+    # a3m without templates is fine), but meaningless for the searching modes.
+    if resolved["msa"] != "custom" and resolved["template_path"]:
+        raise SystemExit(
+            f"{input_path}: Method.template_path only applies to Method.msa = "
             f"'custom', but msa is {resolved['msa']!r}."
         )
 
@@ -252,6 +298,7 @@ def full_args_from_input(input_path):
         seq=fasta_path,
         stoi="".join(stoi_tokens),
         a3m_path=resolved["a3m_path"],
+        template_path=resolved["template_path"],
         msa_config=resolved["msa_config"],
         model_config=resolved["model_config"],
         relax_config=resolved["relax_config"],
@@ -306,7 +353,8 @@ def run_full(args):
     try:
         msa_args = namedtuple(
             "MsaArgs",
-            ["msa", "seq", "stoi", "output_dir", "msa_config", "a3m_path"],
+            ["msa", "seq", "stoi", "output_dir", "msa_config", "a3m_path",
+             "template_path"],
         )(
             msa=msa,
             seq=args.seq,
@@ -314,6 +362,7 @@ def run_full(args):
             output_dir=base_dir,
             msa_config=args.msa_config,
             a3m_path=args.a3m_path,
+            template_path=args.template_path,
         )
         data_yaml = msa_generation(msa_args)
         # Set the model-independent data-yaml fields once: ligands (from
@@ -402,6 +451,7 @@ def cli():
         help="Path to a full-mode input yaml (Method + Entity sections). "
              "Method: jobname, msa, structure (a value or a list, run in "
              "order), relax, optional top5_metric/n_seed/seed_start/a3m_path/"
+             "template_path/"
              "msa_config/model_config/relax_config/base_dir. Only structure may "
              "be a list. "
              "Entity: a list of protein/dna/rna (seq, copy) and/or ligand "
@@ -424,6 +474,12 @@ def cli():
         "--a3m_path", type=str, default=None,
         help="ColabFold-format a3m to use as the protein MSA "
              "(required by --msa custom; not accepted by the other modes)",
+    )
+    p_msa.add_argument(
+        "--template_path", type=str, default=None,
+        help="YAML listing user-supplied templates (path + chain_template + "
+             "chain_query per entry) to force in place of a template search "
+             "(optional, --msa custom only; see examples/template.yaml)",
     )
     p_msa.add_argument(
         "--output_dir", type=str, default=None,

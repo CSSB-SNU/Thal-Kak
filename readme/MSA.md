@@ -13,7 +13,7 @@ FASTA + stoi  ──►  [MSA]  ──►  data yaml  ──►  Structure  ─�
 | Option | Backend | What it does |
 |--------|---------|--------------|
 | `colab` | ColabFold (`colabfold_search`) via the configured env | MMseqs2 search against ColabFold DBs, then AF2 template lookup; the combined a3m is split per chain into paired / unpaired files |
-| `custom` | none — your own alignment | No search. Splits the a3m given by `--a3m_path` per chain, exactly as the `colab` output is split |
+| `custom` | none — your own alignment | No search, for alignments or templates. Splits the a3m given by `--a3m_path` per chain, exactly as the `colab` output is split; `--template_path` optionally supplies templates |
 | `mmseqs_local` | local MMseqs2 | Local MMseqs2 search against the databases under `db/` (no remote server) |
 | `hhblits_local` | local HHblits | Local HHblits search against the databases under `db/` |
 | `mmseqs_hhblits_local` | local MMseqs2 + HHblits | Runs both engines and merges the alignments |
@@ -26,6 +26,28 @@ goes through the same per-chain paired / unpaired split as a `colab` a3m. A head
 that disagrees with the declared entities is rejected rather than split into
 alignments for the wrong sequences. RNA and DNA chains are unaffected and still
 take the routes below.
+
+### Supplying your own templates
+
+`custom` runs no template search, so a prediction that would benefit from a known
+structure has no way to get one unless you name it. `--template_path`
+(`Method.template_path` in a full-mode input) points at a YAML listing templates
+to use as-is:
+
+```yaml
+templates:
+  - path: my_template.cif   # .cif or .pdb; a relative path resolves against this file
+    chain_template: A       # the chain within that structure
+    chain_query: A          # the query protein chain it models
+```
+
+`chain_query` names a query protein chain as `A`, `B`, … in the order protein
+entities appear in the input, and may be a list to reuse one template for several
+identical chains. The entries land in the data yaml's `templates` field — the same
+key the `colab` search fills — so every structure backend consumes them unchanged
+and they are recorded in `method_log.yaml`. The flag is optional (an a3m with no
+templates is fine) and rejected by the searching modes. See
+[../examples/template.yaml](../examples/template.yaml).
 
 `colab` needs no local database. The `*_local` modes run entirely locally against
 the databases under `db/` and take an optional `--msa_config` (default:
@@ -54,6 +76,7 @@ thalkak msa --msa colab \
 - `--seq`: CASP FASTA. One record per distinct sequence, in chain order.
 - `--stoi`: stoichiometry string, e.g. `A1`, `A2B1`, `A1B1C2`. `An` (literal `n`) marks an unknown copy count for chain `A` and is treated as `1`.
 - `--a3m_path`: required by `--msa custom`, rejected by the other modes. The ColabFold-format a3m to use for the protein chains.
+- `--template_path`: optional, `--msa custom` only. A YAML listing templates to use in place of a search — see [Supplying your own templates](#supplying-your-own-templates).
 - `--output_dir`: optional override; defaults to the directory containing the FASTA.
 
 ## Outputs

@@ -146,6 +146,84 @@ def _resolve_custom_a3m(args, protein_entities):
     return src
 
 
+def _resolve_custom_templates(args, protein_entities):
+    """Resolve `--msa custom`'s optional user-supplied templates.
+
+    `template_path` points at a YAML listing templates to force in place of a
+    template search (custom mode runs none of its own). It accepts either a bare
+    list or a mapping with a `templates:` key; each entry needs `path` (a
+    .cif/.pdb structure -- relative paths resolve against the YAML's directory),
+    `chain_template` (the chain within that structure) and `chain_query` (the
+    query protein chain -- A, B, ... in protein-entity order -- it models).
+    Returns the entries in the same schema the colab path emits (so they flow
+    downstream unchanged), or None when no template_path was given."""
+    import string
+
+    src = getattr(args, "template_path", None)
+    if not src:
+        return None
+    src = os.path.abspath(src)
+    if not os.path.isfile(src):
+        raise SystemExit(f"template_path is not a file: {src}")
+
+    with open(src) as f:
+        spec = yaml.safe_load(f)
+    entries = spec.get("templates") if isinstance(spec, dict) else spec
+    if not entries:
+        raise SystemExit(
+            f"{src}: no templates found (expected a `templates:` list, or a bare "
+            f"list of template entries)."
+        )
+    if not isinstance(entries, list):
+        raise SystemExit(
+            f"{src}: `templates` must be a list, got {type(entries).__name__}."
+        )
+
+    # Templates apply to protein chains only; the query letters are A, B, ...
+    # assigned to protein entities in order (same as split_colab_a3m_write_yaml).
+    valid_query = set(string.ascii_uppercase[: len(protein_entities)])
+    base = os.path.dirname(src)
+
+    def _as_list(v):
+        return [str(x) for x in (v if isinstance(v, list) else [v])]
+
+    resolved = []
+    for i, e in enumerate(entries):
+        if not isinstance(e, dict) or not e.get("path"):
+            raise SystemExit(f"{src}: template #{i} needs a 'path'.")
+        p = e["path"]
+        if not os.path.isabs(p):
+            p = os.path.join(base, p)
+        p = os.path.abspath(p)
+        if not os.path.isfile(p):
+            raise SystemExit(f"{src}: template #{i} path is not a file: {p}")
+        if os.path.splitext(p)[1].lower() not in (".cif", ".pdb"):
+            raise SystemExit(
+                f"{src}: template #{i} must be a .cif or .pdb structure: {p}"
+            )
+        if not e.get("chain_template") or not e.get("chain_query"):
+            raise SystemExit(
+                f"{src}: template #{i} needs both 'chain_template' (the chain in "
+                f"the structure) and 'chain_query' (the query protein chain it "
+                f"models)."
+            )
+        chain_query = [c.upper() for c in _as_list(e["chain_query"])]
+        bad = [c for c in chain_query if c not in valid_query]
+        if bad:
+            raise SystemExit(
+                f"{src}: template #{i} chain_query {bad} is not a protein chain; "
+                f"this target's protein chains are {sorted(valid_query)}."
+            )
+        resolved.append(
+            {
+                "path": p,
+                "chain_template": _as_list(e["chain_template"]),
+                "chain_query": chain_query,
+            }
+        )
+    return resolved
+
+
 def msa_generation(args):
     from MSA.local_msa.common.input import normalize_stoi
     from MSA.local_msa.common.caps import live_caps, normalize_caps
@@ -273,6 +351,17 @@ def msa_generation(args):
                         config_changed = True
 
         main_a3m = os.path.join(msa_dir, f"{target_name}.a3m")
+        # custom mode runs no template search, so its templates come from the
+        # spec the caller named. Resolved before the skip/search split: that
+        # path reuses an existing data yaml and would otherwise carry the
+        # previous run's templates, and a bad spec should fail before any file
+        # is written. None for every searching mode, which fills `templates`
+        # itself.
+        custom_templates = (
+            _resolve_custom_templates(args, protein_entities)
+            if args.msa == "custom"
+            else None
+        )
         if skip_msa:
             log.info(
                 "MSA already generated with the same parameters, skipping MSA generation."
@@ -359,6 +448,16 @@ def msa_generation(args):
 
         with open(output_yaml, "r") as f:
             yaml_content = yaml.safe_load(f)
+
+        # custom mode does no template search; fold in any user-supplied
+        # templates so they flow into method_log + the data yaml exactly like a
+        # searched set would.
+        if custom_templates:
+            yaml_content["templates"] = custom_templates
+            log.info(
+                f"Using {len(custom_templates)} user-supplied template(s) "
+                f"from {args.template_path}"
+            )
     else:
         if args.msa == "custom":
             raise SystemExit(

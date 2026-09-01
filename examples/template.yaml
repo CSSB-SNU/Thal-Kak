@@ -1,0 +1,20 @@
+# Template spec for `msa: custom` (Method.template_path / `thalkak msa --template_path`).
+# custom mode runs no template search, so these are the templates it uses.
+# Point Method.template_path at a copy of this file with your own entries.
+#
+# Each entry:
+#   path            a .cif or .pdb structure; a relative path resolves against
+#                   THIS file's directory (an absolute path is used as-is)
+#   chain_template  the chain within that structure to take as the template
+#   chain_query     the query protein chain it models -- A, B, ... in the order
+#                   protein entities appear in the input (a monomer is just A).
+#                   May be a single letter or a list (to reuse one template for
+#                   several identical query chains).
+templates:
+  - path: my_template.cif
+    chain_template: A
+    chain_query: A
+  # A template for a second query chain, or another chain of the same file:
+  # - path: my_template.cif
+  #   chain_template: B
+  #   chain_query: B
