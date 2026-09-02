@@ -540,6 +540,15 @@ def main(data_yaml_path, esm_yaml_path):
                 else None
             )
             pae_arr = res.pae.detach().cpu().numpy() if res.pae is not None else None
+            # Keep the PAE, under the same common/pae_<stem>.pt naming chai uses.
+            # Otherwise only the plot below consumes it and the matrix is lost,
+            # so esmfold2 was the one backend whose PAE a user could not get back
+            # without rerunning the prediction.
+            if pae_arr is not None:
+                torch.save(
+                    torch.from_numpy(pae_arr),
+                    os.path.join(common, f"pae_{stem}.pt"),
+                )
             breaks = _chain_breaks(res.complex.chain_id)
             mean_plddt = float(plddt_arr.mean()) if plddt_arr is not None else None
             ptm = float(res.ptm) if res.ptm is not None else None
