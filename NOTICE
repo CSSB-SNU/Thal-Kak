@@ -195,6 +195,17 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
        rather than a command-line flag, and kernel backends are demoted to the
        pure-PyTorch path on GPUs below compute capability 8.0.
 
+13. OpenDDE
+     - Path:    Structure/submodules/opendde/
+     - Source:  https://github.com/aurekaresearch/OpenDDE (commit ddfa1df, v1.1.1)
+     - License: Apache License 2.0 (see Structure/submodules/opendde/LICENSE)
+     - Copyright (c) 2026 Aureka AI Research.
+     - TRIMMED: the upstream `assets/` and `examples/` directories are not
+       redistributed; neither is used at inference.
+     - MODIFIED by CSSB Thal-Kak (2026):
+         * opendde/model/sample_confidence.py — write the CA-only PAE matrix
+           into summary_confidence whether or not full data was requested.
+
 ================================================================================
 Third-party runtime dependencies (NOT redistributed; installed via pip/conda)
 ================================================================================

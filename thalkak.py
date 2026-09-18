@@ -6,7 +6,10 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 # Method choice sets — shared by the CLI flags and the --input YAML loader
 # (full_args_from_input), so both interfaces validate against one list.
 MSA_CHOICES = ["colab", "custom", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"]
-STRUCTURE_CHOICES = ["boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2"]
+STRUCTURE_CHOICES = [
+    "boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2",
+    "opendde", "opendde_abag",
+]
 RELAX_CHOICES = ["none", "openmm"]
 # Top-5 selection metric -> the summary-CSV column it ranks by. Every predictor
 # writes these same columns, and higher is better for all of them.

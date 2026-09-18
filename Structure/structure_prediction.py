@@ -38,9 +38,9 @@ def _sha256_of(path, chunk=1 << 20):
     return h.hexdigest()
 
 
-def _download_protenix_v2(checkpoint_path):
-    """Download the protenix-v2 checkpoint from the mirror, verify its
-    SHA-256, then move it into place. Raises RuntimeError on mismatch."""
+def _fetch_verified(url, checkpoint_path, sha256, label):
+    """Download a checkpoint, verify its SHA-256, then move it into place.
+    Raises RuntimeError on mismatch."""
     import urllib.request
 
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
@@ -57,22 +57,66 @@ def _download_protenix_v2(checkpoint_path):
         pct = min(100.0, block_num * block_size * 100.0 / total_size)
         if pct >= logged_pct + 10:
             logged_pct = int(pct) // 10 * 10
-            log.info(f"downloading protenix-v2.pt ... {logged_pct}%")
+            log.info(f"downloading {label} ... {logged_pct}%")
 
-    log.info(
-        f"protenix-v2 checkpoint not found; downloading from mirror to {checkpoint_path}"
-    )
-    urllib.request.urlretrieve(_PROTENIX_V2_MIRROR_URL, tmp_path, reporthook=_progress)
+    log.info(f"downloading {label} to {checkpoint_path}")
+    urllib.request.urlretrieve(url, tmp_path, reporthook=_progress)
 
     digest = _sha256_of(tmp_path)
-    if digest != _PROTENIX_V2_SHA256:
+    if digest != sha256:
         os.remove(tmp_path)
         raise RuntimeError(
-            f"protenix-v2 checkpoint failed SHA-256 verification (got {digest}, "
-            f"expected {_PROTENIX_V2_SHA256}); refusing to use it."
+            f"{label} failed SHA-256 verification (got {digest}, expected "
+            f"{sha256}); refusing to use it."
         )
     os.replace(tmp_path, checkpoint_path)
-    log.info("protenix-v2 checkpoint verified (SHA-256 match).")
+    log.info(f"{label} verified (SHA-256 match).")
+
+
+def _opendde_manifest(opendde_root):
+    """OpenDDE's vendored model manifest, which pins the revision its weights
+    are served from and each checkpoint's SHA-256."""
+    import json
+
+    with open(
+        os.path.join(opendde_root, "opendde", "config", "model_manifest.json")
+    ) as f:
+        return json.load(f)
+
+
+def _ensure_opendde_checkpoint(manifest, filename, checkpoint_path):
+    """Make sure one OpenDDE checkpoint is present and the size the manifest
+    records, fetching it from the revision pinned there and verifying its
+    SHA-256. OpenDDE downloads only its own default checkpoint; the rest come
+    through here, and a truncated file is replaced rather than loaded."""
+    spec = next(
+        (
+            c
+            for m in manifest["models"]
+            for c in m["checkpoints"]
+            if c["filename"] == filename
+        ),
+        None,
+    )
+    if spec is None:
+        raise SystemExit(
+            f"{filename} is not a checkpoint OpenDDE's model manifest lists."
+        )
+    if os.path.exists(checkpoint_path):
+        size = os.path.getsize(checkpoint_path)
+        if size == spec["size_bytes"]:
+            return
+        log.info(
+            f"{filename} is {size} bytes, expected {spec['size_bytes']}; "
+            f"downloading a verified replacement"
+        )
+    source = manifest["source"]
+    _fetch_verified(
+        f"{source['repository']}/resolve/{source['revision']}/{filename}",
+        checkpoint_path,
+        spec["sha256"],
+        f"OpenDDE checkpoint {filename}",
+    )
 
 
 def _resolve_model_config(model, model_config):
@@ -240,7 +284,12 @@ def structure_prediction(args):
             if protenix_model_name == "protenix-v2":
                 v2_path = os.path.join(protenix_ckpt_dir, "protenix-v2.pt")
                 if not os.path.exists(v2_path):
-                    _download_protenix_v2(v2_path)
+                    _fetch_verified(
+                        _PROTENIX_V2_MIRROR_URL,
+                        v2_path,
+                        _PROTENIX_V2_SHA256,
+                        "protenix-v2.pt",
+                    )
 
             min_size_test = protenix_yaml.get("data.msa.min_size.test")
             if min_size_test is not None:
@@ -311,6 +360,106 @@ def structure_prediction(args):
             for file in glob.glob(f"{protenix_output}/*.csv"):
                 os.system(f"mv {file} {result_root}/common/")
 
+        case "opendde" | "opendde_abag":
+            with open(model_config) as f:
+                opendde_yaml = yaml.safe_load(f)
+            checkpoint = opendde_yaml["checkpoint"]
+            log.info(f"Running inference with OpenDDE ({checkpoint})...")
+            opendde_root = f"{ROOT}/Structure/submodules/opendde"
+            # One root holds both the CCD caches (common/) and the weights
+            # (checkpoint/), and OpenDDE downloads what is missing on first run.
+            # OPENDDE_ROOT_DIR (e.g. a persistent cache) overrides OpenDDE's own
+            # ~/.cache/opendde default; mirror that default so the checkpoint
+            # path below points at the same place OpenDDE will use.
+            opendde_data = os.environ.get("OPENDDE_ROOT_DIR") or os.path.join(
+                os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                "opendde",
+            )
+            seed = data_yaml["seed"]
+            seed = ",".join(map(str, seed if isinstance(seed, list) else [seed]))
+
+            result_root = f"{output_dir}/{args.model}_results_{target_name}_{job_name}"
+            if os.path.exists(result_root):
+                result_root += datetime.now().strftime("_%Y_%m_%d_%H_%M_%S")
+            common_dir = f"{result_root}/common"
+            os.makedirs(common_dir)
+
+            os.environ["OPENDDE_ROOT_DIR"] = opendde_data
+            os.environ["TQDM_DISABLE"] = "1"
+
+            from argparse import Namespace
+            from Structure.script.protenix.process_msa_to_json import main as protenix_msa_to_json
+            from Structure.script.protenix.protenix_confidence import process_protenix_results
+
+            # OpenDDE is a protenix fork: same input-json schema and same
+            # seed_*/predictions/ layout, so protenix's helpers apply as-is.
+            with log_stream(log):
+                protenix_msa_to_json(
+                    Namespace(
+                        data=args.data_config,
+                        protenix=model_config,
+                        save_path=result_root,
+                        name=target_name,
+                    )
+                )
+
+            manifest = _opendde_manifest(opendde_root)
+            model_name = opendde_yaml.get("model_name", manifest["default_model"])
+            opendde_ckpt_dir = os.path.join(opendde_data, "checkpoint")
+            inference_argv = [
+                sys.executable,
+                os.path.join(opendde_root, "runner", "inference.py"),
+                "--model_name", model_name,
+                "--seeds", seed,
+                "--dump_dir", result_root,
+                "--input_json_path", f"{result_root}/input.json",
+                "--load_checkpoint_dir", opendde_ckpt_dir,
+                "--model.N_cycle", str(opendde_yaml["N_cycle"]),
+                "--sample_diffusion.N_sample", str(opendde_yaml["N_sample"]),
+                "--sample_diffusion.N_step", str(opendde_yaml["N_step"]),
+                "--use_rna_msa", "true",
+                "--use_template", "true",
+            ]
+
+            # Both released weight sets run the one opendde_v1 architecture, so
+            # a non-default checkpoint is selected by path rather than by
+            # model_name. OpenDDE refuses to download a checkpoint given by
+            # path, so fetch it here from the same pinned revision.
+            default_ckpt = next(
+                (
+                    m["default_checkpoint"]
+                    for m in manifest["models"]
+                    if m["name"] == model_name
+                ),
+                None,
+            )
+            if checkpoint != default_ckpt:
+                ckpt_path = os.path.join(opendde_ckpt_dir, checkpoint)
+                _ensure_opendde_checkpoint(manifest, checkpoint, ckpt_path)
+                inference_argv += ["--load_checkpoint_path", ckpt_path]
+
+            # Same as protenix: `configs` / `opendde` / `runner` are imported as
+            # top-level packages from the checkout root, which running the script
+            # by path does not put on the path.
+            env = dict(os.environ)
+            env["PYTHONPATH"] = os.pathsep.join(
+                p for p in (opendde_root, env.get("PYTHONPATH")) if p
+            )
+            run_logged(inference_argv, log, env=env)
+
+            # Confidence scoring
+            opendde_output = f"{result_root}/{target_name}"
+            with log_stream(log):
+                process_protenix_results(opendde_output, job_name, args.model)
+
+            # copy to common
+            for file in glob.glob(f"{opendde_output}/seed_*/predictions/*.pdb"):
+                os.system(f"cp {file} {result_root}/common/")
+            for file in glob.glob(f"{opendde_output}/*.png"):
+                os.system(f"mv {file} {result_root}/common/")
+            for file in glob.glob(f"{opendde_output}/*.csv"):
+                os.system(f"mv {file} {result_root}/common/")
+
     # Write method log (inherit from MSA)
     method_log_path = data_yaml.get("method_log")
     if method_log_path and os.path.exists(method_log_path):
@@ -334,7 +483,10 @@ if __name__ == "__main__":
         "--model",
         type=str,
         required=True,
-        choices=["boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2"],
+        choices=[
+            "boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2",
+            "opendde", "opendde_abag",
+        ],
         help="The model to use for inference.",
     )
     parser.add_argument(

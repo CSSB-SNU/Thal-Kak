@@ -38,7 +38,7 @@ The pipeline consists of three modular stages, each of which can be run independ
 | Stage | Options |
 |-------|---------|
 | MSA (`--msa`) | `colab`, `custom`, `mmseqs_local`, `hhblits_local`, `mmseqs_hhblits_local` |
-| Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `protenix_v2`, `esmfold2` |
+| Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `protenix_v2`, `esmfold2`, `opendde`, `opendde_abag` |
 | Relaxation (`--relax`) | `none`, `openmm` |
 
 The `colab` MSA uses the remote ColabFold server and needs no local database.
@@ -48,7 +48,7 @@ nothing: it takes an alignment you already have (`a3m_path`).
 
 Per-stage documentation:
 - [readme/MSA.md](readme/MSA.md): ColabFold MSA and templates; RNA chains are routed through NHMMER. The local `*_local` engines are documented under [MSA/local_msa](MSA/local_msa/README.md) and [MSA/local_template](MSA/local_template/README.md).
-- [readme/Structure.md](readme/Structure.md): Boltz-2, Chai-1, Protenix, and ESMFold2 runners, plus data/model YAML schemas.
+- [readme/Structure.md](readme/Structure.md): Boltz-2, Chai-1, Protenix, ESMFold2, and OpenDDE runners, plus data/model YAML schemas.
 - [readme/Relax.md](readme/Relax.md): OpenMM all-atom relaxation with pLDDT-weighted restraints.
 
 ### Data flow in `full` mode
@@ -102,6 +102,7 @@ checkpoints (downloaded automatically on each model's first run).
 | Chai-1 checkpoint | `Structure/submodules/chai-lab/downloads/` | 6.6 GiB |
 | Protenix checkpoint | `Structure/submodules/protenix/{checkpoint,common}/` | 2.4 GiB (`protenix_v2`; +1.4 GiB to also run `protenix_v1`) |
 | ESMFold2 checkpoint | `~/.cache/huggingface/` (ESM-C 6B backbone) | 25 GiB |
+| OpenDDE checkpoint | `~/.cache/opendde/{checkpoint,common}/` | 3.1 GiB (`opendde`; +2.5 GiB to also run `opendde_abag`) |
 
 The local databases add much more: the RNA database (`db/rna`, ~70 GiB free
 while it builds, 28 GiB kept — required for RNA or RNP targets) and the

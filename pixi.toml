@@ -106,6 +106,7 @@ absl-py = "==1.4.0"
 boltz = "==2.2.1"
 chai_lab = { path = "Structure/submodules/chai-lab", editable = true }
 protenix = { path = "Structure/submodules/protenix", editable = true }
+opendde = { path = "Structure/submodules/opendde", editable = true }
 thalkak = { path = ".", editable = true }
 
 # ---- post-install steps (install.sh steps not expressible as dependencies) ----

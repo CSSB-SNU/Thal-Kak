@@ -16,3 +16,9 @@ subtrees:
     url: https://github.com/bytedance/Protenix.git
     commit: c3bfc365b3e1341a11935eddfe7bfdc308092147
     patches: local modifications reapplied on top (see git log)
+
+  - path: Structure/submodules/opendde
+    url: https://github.com/aurekaresearch/OpenDDE.git
+    commit: ddfa1df8aff1babf1fddac4247b7d2351bd0ce9f   # v1.1.1
+    trimmed: assets/ and examples/ dropped; neither is used at inference
+    patches: local modifications reapplied on top (see git log)

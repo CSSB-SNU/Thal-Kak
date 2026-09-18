@@ -17,6 +17,8 @@ MSA  ──►  data yaml + model yaml  ──►  [Structure]  ──►  commo
 | `protenix_v1` | Protenix v1 generation (`protenix_base_default_v1.0.0`, 368M base) | `Structure/submodules/protenix/checkpoint/` |
 | `protenix_v2` | Protenix `protenix-v2` (464M scaled-up) | `Structure/submodules/protenix/checkpoint/` |
 | `esmfold2` | ESMFold2 (MSA-free or MSA-augmented) | `~/.cache/huggingface/` |
+| `opendde` | OpenDDE `opendde_v1`, general checkpoint | `~/.cache/opendde/` |
+| `opendde_abag` | OpenDDE `opendde_v1`, antibody-antigen checkpoint | `~/.cache/opendde/` |
 
 All backends share the same input / output contract and run in the one unified environment (pixi or conda). Each downloads its own weights to the default cache location above on first run.
 
@@ -31,7 +33,7 @@ thalkak structure --model boltz2 \
 ## Inputs
 
 - `--data_config`: data yaml, produced by the [MSA](MSA.md) stage (`thalkak msa` writes it to `<output_dir>/<target>.yaml`). The fields `job_name`, `output_dir`, and `seed` must be filled in. `seed` may be a single int or a list of ints. See [Data yaml schema](#data-yaml-schema).
-- `--model_config`: model config yaml, keyed by model name — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2`); the requested model's section is extracted automatically. Default `examples/model_config.yaml`. See [Model yaml schemas](#model-yaml-schemas).
+- `--model_config`: model config yaml, keyed by model name — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2` / `opendde` / `opendde_abag`); the requested model's section is extracted automatically. Default `examples/model_config.yaml`. See [Model yaml schemas](#model-yaml-schemas).
 
 ## Outputs
 
@@ -222,7 +224,7 @@ BBBBBBBBBBBBBBBBBBBBB
 
 ## Model yaml schemas
 
-The pipeline ships defaults in `examples/model_config.yaml` — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2`), keyed by model name. Edit the section for the model you're invoking; the schemas below describe each section's keys.
+The pipeline ships defaults in `examples/model_config.yaml` — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2` / `opendde` / `opendde_abag`), keyed by model name. Edit the section for the model you're invoking; the schemas below describe each section's keys.
 
 <details>
 <summary><b>Boltz-2</b></summary>
@@ -328,6 +330,27 @@ use_tfg_guidance: bool    # enable Training-Free Guidance (TFG) sampling
 **`use_tfg_guidance`** (`protenix_v2` only): when `True`, the runner turns on Protenix's Training-Free Guidance pass, which refines diffusion sampling without retraining the model, at the cost of extra inference time per sample. Leave `False` for vanilla sampling. It is skipped automatically for single-chain inputs, which trip a Protenix bug in the steric potential. Putting this key in a `protenix_v1` section is an error rather than a silent no-op.
 
 `protenix_v2` weights are no longer downloadable from Protenix's official endpoint; see [the note in the top-level README](../README.md#install) for how they are fetched and verified. `protenix_v1` weights download normally on first run.
+
+</details>
+
+<details>
+<summary><b>OpenDDE (<code>opendde</code> / <code>opendde_abag</code>)</b></summary>
+
+OpenDDE is a Protenix fork, so it takes the same input JSON and writes the same `seed_*/predictions/` layout, and Thal-Kak reuses the Protenix helpers for both. It ships one architecture, `opendde_v1`, with two released weight sets: `opendde` runs the general checkpoint and `opendde_abag` the antibody-antigen one.
+
+```yaml
+model_name: str           # OpenDDE architecture, opendde_v1
+checkpoint: str           # weight file under OPENDDE_ROOT_DIR/checkpoint/, e.g. opendde.pt
+N_cycle: int              # number of recycling iterations
+N_sample: int             # number of diffusion samples
+N_step: int               # diffusion steps per sample
+```
+
+**`checkpoint`**: both weight sets run the one `opendde_v1` architecture, so they are told apart by file rather than by `model_name`. OpenDDE downloads only its own default checkpoint, so any other one is fetched by Thal-Kak from the same source revision and verified against the SHA-256, both of which the vendored `opendde/config/model_manifest.json` pins. A file whose size does not match the manifest is replaced rather than loaded, so an interrupted download repairs itself on the next run.
+
+**Weights cache**: OpenDDE keeps its CCD caches (`common/`, about 650 MiB) and its checkpoints (`checkpoint/`, about 2.5 GiB each) under one root, `~/.cache/opendde` by default. Set `OPENDDE_ROOT_DIR` to move both, e.g. to a shared cache.
+
+Triangle kernels are left at OpenDDE's `auto`, which uses cuEquivariance where the GPU supports it and the pure-PyTorch path otherwise.
 
 </details>
 
