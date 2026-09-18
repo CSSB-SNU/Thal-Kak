@@ -43,11 +43,10 @@ protenix_v2:
   chunk_size:   # int|null -- tile the pairformer/template stacks over N_token blocks (memory, costs speed). null = automatic: protenix's own dynamic chunking, which leaves inputs up to 1024 tokens untiled, except on GPUs below compute capability 8.0 (V100, T4) where Thal-Kak tiles at 512 because protenix falls back to fp32 and the unfused triangle kernels there
   data.msa.min_size.test:   # protenix subsamples the MSA by default (random depth per recycle). null/omit = native subsampling. Set to 16384 (== featurization cap, max usable depth) to force full MSA on every recycle; raw MSAs deeper than 16384 are truncated to the first 16384 rows at featurization regardless.
 
-# OpenDDE is a protenix-family model: same input-json schema and output layout,
-# one architecture (opendde_v1) with two released weight sets. `opendde` runs the
-# general checkpoint, `opendde_abag` the antibody-antigen one. `checkpoint` names
-# a file under OPENDDE_ROOT_DIR/checkpoint/ (default ~/.cache/opendde), fetched
-# on first run from the revision the vendored model manifest pins.
+# OpenDDE ships one architecture (opendde_v1) with two weight sets: `opendde`
+# runs the general checkpoint, `opendde_abag` the antibody-antigen one.
+# `checkpoint` names a file under OPENDDE_ROOT_DIR/checkpoint/ (default
+# ~/.cache/opendde), downloaded on first run.
 opendde:
   N_sample: 5
   N_step: 200

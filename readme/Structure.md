@@ -336,7 +336,7 @@ use_tfg_guidance: bool    # enable Training-Free Guidance (TFG) sampling
 <details>
 <summary><b>OpenDDE (<code>opendde</code> / <code>opendde_abag</code>)</b></summary>
 
-OpenDDE is a Protenix fork, so it takes the same input JSON and writes the same `seed_*/predictions/` layout, and Thal-Kak reuses the Protenix helpers for both. It ships one architecture, `opendde_v1`, with two released weight sets: `opendde` runs the general checkpoint and `opendde_abag` the antibody-antigen one.
+OpenDDE takes the same input JSON as Protenix and writes the same `seed_*/predictions/` layout, so Thal-Kak reuses the Protenix helpers for both. It ships one architecture, `opendde_v1`, with two released weight sets: `opendde` runs the general checkpoint and `opendde_abag` the antibody-antigen one.
 
 ```yaml
 model_name: str           # OpenDDE architecture, opendde_v1
@@ -346,7 +346,7 @@ N_sample: int             # number of diffusion samples
 N_step: int               # diffusion steps per sample
 ```
 
-**`checkpoint`**: both weight sets run the one `opendde_v1` architecture, so they are told apart by file rather than by `model_name`. OpenDDE downloads only its own default checkpoint, so any other one is fetched by Thal-Kak from the same source revision and verified against the SHA-256, both of which the vendored `opendde/config/model_manifest.json` pins. A file whose size does not match the manifest is replaced rather than loaded, so an interrupted download repairs itself on the next run.
+**`checkpoint`**: both weight sets run the one `opendde_v1` architecture, so they are told apart by file rather than by `model_name`. OpenDDE downloads only its own default checkpoint; Thal-Kak fetches any other one from the revision `opendde/config/model_manifest.json` pins, and checks its size and SHA-256 against that manifest before use.
 
 **Weights cache**: OpenDDE keeps its CCD caches (`common/`, about 650 MiB) and its checkpoints (`checkpoint/`, about 2.5 GiB each) under one root, `~/.cache/opendde` by default. Set `OPENDDE_ROOT_DIR` to move both, e.g. to a shared cache.
 

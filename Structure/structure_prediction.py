@@ -74,8 +74,8 @@ def _fetch_verified(url, checkpoint_path, sha256, label):
 
 
 def _opendde_manifest(opendde_root):
-    """OpenDDE's vendored model manifest, which pins the revision its weights
-    are served from and each checkpoint's SHA-256."""
+    """OpenDDE's model manifest: the revision its weights are served from, and
+    each checkpoint's size and SHA-256."""
     import json
 
     with open(
@@ -85,10 +85,9 @@ def _opendde_manifest(opendde_root):
 
 
 def _ensure_opendde_checkpoint(manifest, filename, checkpoint_path):
-    """Make sure one OpenDDE checkpoint is present and the size the manifest
-    records, fetching it from the revision pinned there and verifying its
-    SHA-256. OpenDDE downloads only its own default checkpoint; the rest come
-    through here, and a truncated file is replaced rather than loaded."""
+    """Download the checkpoint unless it is already there at the manifest's
+    size, and verify its SHA-256. OpenDDE downloads only its own default
+    checkpoint; the rest come through here."""
     spec = next(
         (
             c
@@ -366,11 +365,9 @@ def structure_prediction(args):
             checkpoint = opendde_yaml["checkpoint"]
             log.info(f"Running inference with OpenDDE ({checkpoint})...")
             opendde_root = f"{ROOT}/Structure/submodules/opendde"
-            # One root holds both the CCD caches (common/) and the weights
-            # (checkpoint/), and OpenDDE downloads what is missing on first run.
-            # OPENDDE_ROOT_DIR (e.g. a persistent cache) overrides OpenDDE's own
-            # ~/.cache/opendde default; mirror that default so the checkpoint
-            # path below points at the same place OpenDDE will use.
+            # OpenDDE keeps its CCD caches and its weights under one root and
+            # downloads what is missing. Resolve its default here too, so the
+            # checkpoint path below names the same place the runner will use.
             opendde_data = os.environ.get("OPENDDE_ROOT_DIR") or os.path.join(
                 os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
                 "opendde",
@@ -391,8 +388,8 @@ def structure_prediction(args):
             from Structure.script.protenix.process_msa_to_json import main as protenix_msa_to_json
             from Structure.script.protenix.protenix_confidence import process_protenix_results
 
-            # OpenDDE is a protenix fork: same input-json schema and same
-            # seed_*/predictions/ layout, so protenix's helpers apply as-is.
+            # OpenDDE takes the same input-json schema as protenix and writes
+            # the same seed_*/predictions/ layout, so protenix's helpers apply.
             with log_stream(log):
                 protenix_msa_to_json(
                     Namespace(
@@ -421,10 +418,9 @@ def structure_prediction(args):
                 "--use_template", "true",
             ]
 
-            # Both released weight sets run the one opendde_v1 architecture, so
-            # a non-default checkpoint is selected by path rather than by
-            # model_name. OpenDDE refuses to download a checkpoint given by
-            # path, so fetch it here from the same pinned revision.
+            # Both weight sets run the one opendde_v1 architecture, so model_name
+            # cannot pick between them: a non-default checkpoint goes by path,
+            # and OpenDDE will not download one given that way.
             default_ckpt = next(
                 (
                     m["default_checkpoint"]
@@ -439,8 +435,8 @@ def structure_prediction(args):
                 inference_argv += ["--load_checkpoint_path", ckpt_path]
 
             # Same as protenix: `configs` / `opendde` / `runner` are imported as
-            # top-level packages from the checkout root, which running the script
-            # by path does not put on the path.
+            # top-level packages from the checkout root, which running the
+            # script by path does not put on the path.
             env = dict(os.environ)
             env["PYTHONPATH"] = os.pathsep.join(
                 p for p in (opendde_root, env.get("PYTHONPATH")) if p
