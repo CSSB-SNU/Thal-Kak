@@ -10,7 +10,7 @@ COMMON_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "common")
 for _p in (SCRIPT_DIR, COMMON_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from chain_utils import assign_chain_indices
+from chain_utils import assign_chain_indices, parse_bonds
 from template_cleaner import clean_template_for_boltz
 from chain_utils import PDB_CHAIN_CHARS, CIF_CHAIN_CHARS
 from thalkak import get_logger, run_logged
@@ -350,6 +350,15 @@ def main(data_yaml, boltz2_yaml):
         yaml_output += f"  - {entity['type']}:\n"
         yaml_output += f"      id: [{','.join(chain_ids)}]\n"
         yaml_output += f"      sequence: {sequence}\n"
+        # boltz reads {position, ccd} for every polymer class alike, and takes
+        # the position 1-based (schema.py: `idx = mod["position"] - 1`), which is
+        # how the data yaml carries it.
+        mods = entity.get("modifications") or []
+        if mods:
+            yaml_output += "      modifications:\n"
+            for mod in mods:
+                yaml_output += f"        - position: {mod['position']}\n"
+                yaml_output += f"          ccd: {mod['ccd']}\n"
         if entity["type"] == "protein":
             protein_chain_ids.update(chain_ids)
             yaml_output += (
@@ -404,10 +413,19 @@ def main(data_yaml, boltz2_yaml):
         if template_yaml:
             yaml_output += "templates:\n" + template_yaml
 
-    ## constraint parsing
-    if "constraints" in boltz_config and boltz_config["constraints"]:
+    ## constraint parsing -- model config constraints plus the data yaml's
+    ## covalent bonds, which boltz takes as one more constraint kind. Its atom
+    ## addressing ([chain, residue, atom], residue 1-based) is the same as the
+    ## data yaml's, so the bonds go through unchanged.
+    constraints = list(boltz_config.get("constraints") or [])
+    bonds = parse_bonds(data_config)
+    for c1, r1, a1, c2, r2, a2 in bonds:
+        constraints.append({"bond": {"atom1": [c1, r1, a1], "atom2": [c2, r2, a2]}})
+    if bonds:
+        print(f"[boltz] {len(bonds)} covalent bond(s) added as constraints")
+    if constraints:
         yaml_output += "constraints:\n  "
-        yaml_dump = yaml.dump(boltz_config["constraints"], default_flow_style=False)
+        yaml_dump = yaml.dump(constraints, default_flow_style=False)
         yaml_output += yaml_dump.replace("\n", "\n  ")
 
     with open(f"{temp_dir}/{name}.yaml", "w") as input_file:

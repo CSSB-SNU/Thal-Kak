@@ -20,9 +20,15 @@ Method:
 Entity:
   # `type` is required. protein/dna/rna use `seq`; ligand uses `smiles` or `ccd`.
   # `copy` = number of chains (builds the stoichiometry).
+  # `modifications` (optional) replaces a residue with a modified one, given as a
+  # CCD code at a 1-based position. The MSA is still searched with the
+  # unmodified sequence.
   - type: protein
     seq: ETGCNKALCASDVSKCLIQELCQCRPGEGNCSCCKECMLCLGALWDECCDCVGMCNPRNYSDTPPTSKSTVEELHEPIPSLFRALTEGDTQLNWNIVSFPVAEELSHHENLVSFLETVNQPHHQNVSVPSNNVHAPYSSDKEHMCTVVYFDDCMSIHQCKISCESMGASKYRWFHNACCECIGPECIDYGSKTVKCMNCMFGTKHHHHHH
     copy: 1
+    # modifications:
+    #   - position: 113    # 113th residue (S) -> phosphoserine
+    #     ccd: SEP
 
   # Add more entities as needed — examples (commented):
   # - type: dna
@@ -34,3 +40,18 @@ Entity:
   # - type: ligand
   #   ccd: ATP
   #   copy: 1
+
+# `Bonds` (optional) covalently attaches a ligand to a residue -- how a glycan is
+# modelled, since a sugar has no polymer backbone and so cannot be a
+# `modifications` entry. `residue` is 1-based; the chain letters each entity gets
+# are logged at startup. Needs a `ccd` ligand (a SMILES one has no atom names).
+# Every model but chai-1 uses it; chai-1 logs that it ignored it.
+# Bonds:
+#   - atom1:
+#       chain: A         # chain letters are logged at startup
+#       residue: 125     # 1-based
+#       atom: ND2        # Asn side-chain N
+#     atom2:
+#       chain: B
+#       residue: 1
+#       atom: C1         # NAG anomeric C

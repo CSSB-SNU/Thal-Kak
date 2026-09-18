@@ -54,6 +54,10 @@ a3m:
   unpaired_path: str(AlphaFold3-style a3m Path) | null
   copy: int
   type: str(protein|dna|rna)
+  modifications (Optional):
+  - position: int      # 1-based, within this entity's sequence
+    ccd: str(CCD ID)   # the modified residue to put there
+  - ...
 - ...
 
 ligand (Optional):
@@ -70,6 +74,17 @@ templates (Optional):
   - str(Chain)
   - str(Chain)
   - ...
+
+bonds (Optional):
+- atom1:
+    chain: str(Chain)   # chain letter; the assignment is logged at startup
+    residue: int        # 1-based within that chain
+    atom: str           # atom name, e.g. ND2
+  atom2:
+    chain: str(Chain)
+    residue: int
+    atom: str
+- ...
 
 job_name: str
 output_dir: str(Path)
@@ -96,6 +111,28 @@ When the query has 2+ distinct sequences, paired and unpaired MSAs must be prepa
 |-------|---------|
 | `chain_template` | Which chain of the template to use |
 | `chain_query` | Which predicted-sequence chains the template applies to |
+
+### `modifications` field
+
+A modified residue, given as a CCD code at a 1-based position in that entity's
+sequence — phosphoserine (`SEP`), acetyl-lysine (`ALY`) and so on. The MSA is
+searched with the unmodified sequence, so these reach the structure stage only.
+`thalkak full` rejects a code placed on a residue it cannot derive from (`SEP`
+on a Gly), for the modifications it knows; an unrecognised code passes and the
+backend reports whether its own CCD can build it.
+
+Each backend expresses these differently and the runners convert: boltz takes
+`{position, ccd}`, protenix wants the code prefixed `CCD_`, esmfold2 counts
+positions from 0, and chai-1 has no field at all and splices `(CCD)` into the
+query sequence. That last one costs chai-1 its MSA whenever the substitution
+changes the letter it hashes, which the runner warns about before folding.
+
+### `bonds` field
+
+A covalent bond between two named atoms — how a glycan is attached, since a
+sugar has no polymer backbone and so cannot be a `modifications` entry. Needs a
+`ccd` ligand; a SMILES one has no atom names to reference. Every backend but
+chai-1 honours it, and chai-1 logs that it did not.
 
 <details>
 <summary><b>Hand-preparing a3m (when bypassing the MSA stage)</b></summary>

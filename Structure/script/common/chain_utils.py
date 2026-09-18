@@ -53,3 +53,27 @@ def assign_chain_indices(copies, types):
                     chains_per_entity[orig_i].append(k)
                     k += 1
     return chains_per_entity
+
+
+def parse_bonds(data_cfg):
+    """Read the data yaml's optional `bonds` into [(c1, r1, a1, c2, r2, a2), ...].
+
+    A bond names its two atoms as {chain, residue, atom}, the residue 1-based
+    within its chain. af3 and boltz take that addressing directly; protenix maps
+    it onto its own entity/copy scheme. Covalent bonds are how glycans and
+    covalent ligands attach, since a sugar has no polymer backbone and so cannot
+    be given as a residue modification.
+    """
+    out = []
+    for i, bond in enumerate(data_cfg.get("bonds") or []):
+        try:
+            a1, a2 = bond["atom1"], bond["atom2"]
+            c1, r1, n1 = a1["chain"], int(a1["residue"]), a1["atom"]
+            c2, r2, n2 = a2["chain"], int(a2["residue"]), a2["atom"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"bonds[{i}]: expected atom1/atom2 as {{chain, residue, atom}}, "
+                f"e.g. {{chain: A, residue: 125, atom: ND2}}; got {bond!r} ({exc})"
+            ) from exc
+        out.append((str(c1), r1, str(n1), str(c2), r2, str(n2)))
+    return out

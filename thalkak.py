@@ -148,6 +148,186 @@ def _select_top5_for_job(decoy_dir, top5_dir, metric="ranking_score"):
     return picked
 
 
+# The standard residue each common modification derives from, used only to catch
+# a modification placed on the wrong residue (SEP on a Gly, say) before a run
+# burns an MSA on it. Deliberately partial: an unlisted code is left alone, since
+# each predictor ships its own CCD and is the authority on what it accepts.
+# CCD code -> the sequence letter(s) it may replace, from the PDB chemical
+# component dictionary's `mon_nstd_parent_comp_id`. Protein, DNA and RNA reuse
+# the letters A/C/G, hence the repeated keys below.
+#
+# A position guard only: an unlisted code passes, and whether a model's CCD can
+# build the component is the model's to report.
+_MOD_PARENT = {
+    ccd: frozenset(parents)
+    for parents, ccds in (
+        # --- protein ---
+        ("S", ("SEP", "SAC")),                              # phospho-, N-acetyl-
+        ("T", ("TPO",)),                                    # phospho-
+        ("Y", ("PTR", "TYS", "NIY")),                       # phospho-, sulfo-, nitro-
+        # DOPA. The CCD parent is Tyr, but the name reads as dihydroxy-Phe.
+        ("YF", ("DAH",)),
+        # N6 mono/di/tri-methyl-, N6-acetyl-, NZ-carboxy-, 5-hydroxy-
+        ("K", ("MLZ", "MLY", "M3L", "ALY", "KCX", "LYZ")),
+        # N2-methyl-, 5-methyl-, N3,N4-dimethyl-, citrulline
+        ("R", ("MMO", "AGM", "2MR", "CIR")),
+        ("P", ("HYP", "HY3")),                              # 4-, 3-hydroxy-
+        # sulfenic/sulfinic/sulfonic acid, S-methyl-, S-nitroso-, persulfide
+        ("C", ("CSO", "CSD", "OCS", "SMC", "SNC", "CSS")),
+        ("H", ("MHS", "HIC", "NEP")),                       # N1-, 4-methyl-, phospho-
+        ("M", ("MSE", "FME")),                              # seleno-, N-formyl-
+        ("E", ("CGU",)),                                    # gamma-carboxy-
+        ("D", ("PHD",)),                                    # phospho-
+        ("N", ("MEN",)),                                    # N-methyl-
+        ("L", ("MLE",)),                                    # N-methyl-
+        ("V", ("MVA",)),                                    # N-methyl-
+        ("QE", ("PCA",)),  # pyroglutamate cyclises from Gln or Glu
+        # --- RNA ---
+        # 1-methyl-, 2-methyl-, N6-methyl-, N6,N6-dimethyl-, 2'-O-methyl-
+        ("A", ("1MA", "2MA", "6MZ", "MA6", "A2M")),
+        # N1-, N2-, N2,N2-, 7-methyl-8-hydro-, N7-, 2'-O-methyl-
+        ("G", ("1MG", "2MG", "M2G", "7MG", "G7M", "OMG")),
+        ("C", ("5MC", "OMC")),                              # 5-, 2'-O-methyl-
+        # pseudouridine, 5,6-dihydro-, 5-methyl-, 2'-O-methyl-, 3-methyl-, 4-thio-
+        ("U", ("PSU", "H2U", "5MU", "OMU", "UR3", "4SU")),
+        # --- DNA (parents DA/DC/DG/DT, written with the same letters) ---
+        # 5-methyl-, 5-hydroxymethyl-, 5-formyl-
+        ("C", ("5CM", "5HC", "5FC")),
+        ("G", ("6OG", "8OG")),                              # O6-methyl-, 8-oxo-
+    )
+    for ccd in ccds
+}
+
+
+def _parse_modifications(entity, idx, input_path):
+    """Validate one polymer entity's optional `modifications` and normalise them
+    to ``[{"position": <1-based int>, "ccd": <str>}, ...]``, sorted by position.
+
+    Positions are 1-based -- the convention af3, boltz and protenix all use, and
+    the one a biologist writes. Each structure runner converts from here to what
+    its own predictor wants (esmfold2, for one, indexes from 0).
+    """
+    raw = entity.get("modifications")
+    if not raw:
+        return []
+    where = f"{input_path}: entity #{idx}"
+    if not isinstance(raw, list):
+        raise SystemExit(f"{where}: 'modifications' must be a list.")
+    seq = "".join(str(entity["seq"]).split()).upper()
+    seq_len = len(seq)
+    out, seen = [], set()
+    for j, m in enumerate(raw):
+        if not isinstance(m, dict) or m.get("position") is None or not m.get("ccd"):
+            raise SystemExit(
+                f"{where}: modification #{j} needs 'position' (1-based) and "
+                f"'ccd' (e.g. {{position: 3, ccd: SEP}})."
+            )
+        try:
+            pos = int(m["position"])
+        except (TypeError, ValueError):
+            raise SystemExit(
+                f"{where}: modification #{j} position {m['position']!r} is not an "
+                f"integer."
+            )
+        if not 1 <= pos <= seq_len:
+            raise SystemExit(
+                f"{where}: modification #{j} position {pos} is outside the "
+                f"sequence (1..{seq_len})."
+            )
+        if pos in seen:
+            raise SystemExit(f"{where}: two modifications at position {pos}.")
+        seen.add(pos)
+        ccd = str(m["ccd"]).strip().upper()
+        if not ccd.isalnum():
+            raise SystemExit(
+                f"{where}: modification #{j} ccd {ccd!r} is not a CCD code "
+                f"(letters/digits only, e.g. SEP)."
+            )
+        parents = _MOD_PARENT.get(ccd)
+        if parents is not None and seq[pos - 1] not in parents:
+            expected = " or ".join(sorted(parents))
+            raise SystemExit(
+                f"{where}: modification #{j} puts {ccd} (a modified {expected}) "
+                f"on {seq[pos - 1]}{pos}. Positions are 1-based -- check it, or "
+                f"drop the modification if the residue is meant to change."
+            )
+        out.append({"position": pos, "ccd": ccd})
+    return sorted(out, key=lambda d: d["position"])
+
+
+def _log_chain_assignment(polymers, ligands):
+    """Log which chain letters each entity receives.
+
+    `bonds` names atoms by chain id, and chains are handed out polymer-first
+    (round-robin over copies) then ligands, so printing the mapping saves the
+    user from working it out by hand.
+    """
+    common = os.path.join(ROOT, "Structure", "script", "common")
+    if common not in sys.path:
+        sys.path.insert(0, common)
+    from chain_utils import CIF_CHAIN_CHARS, assign_chain_indices
+
+    copies = [int(p.get("copy", 1)) for p in polymers]
+    types = [0 if p["type"] == "protein" else 1 for p in polymers]
+    per_entity = assign_chain_indices(copies, types)
+    parts = []
+    for i, p in enumerate(polymers):
+        letters = ",".join(CIF_CHAIN_CHARS[c] for c in per_entity[i])
+        parts.append(f"{letters}={p['type']}#{i + 1}")
+    nxt = sum(copies)
+    for j, lig in enumerate(ligands):
+        c = int(lig.get("copy", 1))
+        letters = ",".join(CIF_CHAIN_CHARS[x] for x in range(nxt, nxt + c))
+        parts.append(f"{letters}=ligand#{j + 1}({lig.get('ccd') or 'smiles'})")
+        nxt += c
+    if parts:
+        get_logger("thalkak.full").info(
+            "Chain assignment: " + "  ".join(parts)
+        )
+
+
+def _parse_bonds_input(cfg, input_path):
+    """Validate the input's optional top-level `Bonds` and return them as-is.
+
+    Kept in the data yaml's own shape ({chain, residue, atom} per atom) so full
+    mode only renames the key on the way through, and the runners stay the single
+    place that knows each predictor's addressing.
+    """
+    bonds = cfg.get("Bonds")
+    if not bonds:
+        return None
+    common = os.path.join(ROOT, "Structure", "script", "common")
+    if common not in sys.path:
+        sys.path.insert(0, common)
+    from chain_utils import parse_bonds
+
+    try:
+        parse_bonds({"bonds": bonds})
+    except ValueError as exc:
+        raise SystemExit(f"{input_path}: {exc}")
+    return bonds
+
+
+def _apply_modifications(yaml_content, protein_mods, na_mods):
+    """Attach the per-entity modifications to the data yaml's a3m entries.
+
+    msa_generation emits a3m entries as [protein entities..., NA entities...],
+    each group in input order, so the two lists zip on by entry type. The MSA
+    search never sees these -- they are structure-prediction input only, which
+    is why they are injected here rather than threaded through msa_generation.
+    """
+    p_i = n_i = 0
+    for entry in yaml_content.get("a3m") or []:
+        if entry.get("type") == "protein":
+            mods = protein_mods[p_i] if p_i < len(protein_mods) else []
+            p_i += 1
+        else:
+            mods = na_mods[n_i] if n_i < len(na_mods) else []
+            n_i += 1
+        if mods:
+            entry["modifications"] = mods
+
+
 def full_args_from_input(input_path):
     """Load a full-mode input yaml (Method + Entity) into a run_full args set.
 
@@ -251,11 +431,22 @@ def full_args_from_input(input_path):
                     f"{input_path}: ligand entity #{i} needs 'smiles' or 'ccd'."
                 )
             spec["copy"] = int(e.get("copy", 1))
+            if e.get("modifications"):
+                raise SystemExit(
+                    f"{input_path}: ligand entity #{i} cannot take "
+                    f"'modifications' (they apply to protein/dna/rna entities)."
+                )
             ligands.append(spec)
         elif etype in ("protein", "dna", "rna"):
             if not e.get("seq"):
                 raise SystemExit(f"{input_path}: {etype} entity #{i} needs 'seq'.")
-            polymers.append(e)
+            polymers.append(
+                {
+                    **e,
+                    "type": etype,
+                    "modifications": _parse_modifications(e, i, input_path),
+                }
+            )
         else:
             raise SystemExit(
                 f"{input_path}: entity #{i} has unknown type {etype!r} "
@@ -290,6 +481,19 @@ def full_args_from_input(input_path):
     if ligands:
         log.info(f"Parsed {len(ligands)} ligand entity(ies) from input.")
 
+    # Split to match how msa_generation orders a3m entries (proteins, then NAs);
+    # run_full zips these back onto them.
+    protein_mods = [p["modifications"] for p in polymers if p["type"] == "protein"]
+    na_mods = [p["modifications"] for p in polymers if p["type"] != "protein"]
+    n_mods = sum(len(m) for m in protein_mods) + sum(len(m) for m in na_mods)
+    if n_mods:
+        log.info(f"Parsed {n_mods} residue modification(s) from input entities.")
+
+    bonds = _parse_bonds_input(cfg, input_path)
+    if bonds:
+        log.info(f"Parsed {len(bonds)} covalent bond(s) from input.")
+        _log_chain_assignment(polymers, ligands)
+
     return argparse.Namespace(
         msa=resolved["msa"],
         structure=resolved["structure"],
@@ -299,6 +503,9 @@ def full_args_from_input(input_path):
         stoi="".join(stoi_tokens),
         a3m_path=resolved["a3m_path"],
         template_path=resolved["template_path"],
+        protein_modifications=protein_mods,
+        na_modifications=na_mods,
+        bonds=bonds,
         msa_config=resolved["msa_config"],
         model_config=resolved["model_config"],
         relax_config=resolved["relax_config"],
@@ -372,6 +579,15 @@ def run_full(args):
             yaml_content = yaml.safe_load(f)
         if ligand:
             yaml_content["ligand"] = ligand
+        # Residue modifications ride on the a3m entries; the MSA above was built
+        # from the unmodified sequences, which is what the search should use.
+        _apply_modifications(
+            yaml_content, args.protein_modifications, args.na_modifications
+        )
+        # Covalent bonds pass straight through in the data yaml's own shape;
+        # each runner converts to its predictor's addressing.
+        if args.bonds:
+            yaml_content["bonds"] = args.bonds
         yaml_content["output_dir"] = os.path.join(base_dir, "structure")
         yaml_content["seed"] = list(
             range(args.seed_start, args.seed_start + args.n_seed)

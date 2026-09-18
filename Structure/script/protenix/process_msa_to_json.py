@@ -16,7 +16,7 @@ COMMON_DIR = os.path.join(
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
 from process_template import generate_m8_from_hhsearch
-from chain_utils import assign_chain_indices, CIF_CHAIN_CHARS
+from chain_utils import assign_chain_indices, CIF_CHAIN_CHARS, parse_bonds
 
 
 # ============================================================================
@@ -340,6 +340,24 @@ def extract_template_chain(
 # ============================================================================
 
 
+def _build_modifications(mods, entity_type):
+    """Convert data-yaml modifications ({ccd, 1-based position}) to protenix's.
+
+    Keys are named per polymer class -- ptmType/ptmPosition for proteinChain,
+    modificationType/basePosition for dna/rnaSequence -- and the code must carry
+    protenix's ``CCD_`` prefix: json_parser.py raises ValueError("unknown
+    modification type") on a bare code.
+    """
+    if entity_type == "proteinChain":
+        return [
+            {"ptmType": f"CCD_{m['ccd']}", "ptmPosition": m["position"]} for m in mods
+        ]
+    return [
+        {"modificationType": f"CCD_{m['ccd']}", "basePosition": m["position"]}
+        for m in mods
+    ]
+
+
 def _build_ligand_entry(lig_yaml_entry):
     """Convert yaml ligand entry into Protenix-format ligand object.
 
@@ -548,6 +566,7 @@ def main(args):
                     str(templates_json_path.absolute()) if templates_json_path else None
                 ),
                 "copy": item.get("copy", 1),
+                "modifications": item.get("modifications") or [],
             }
         )
 
@@ -563,17 +582,18 @@ def main(args):
     json_sequences = []
     for _, entity_idx in chain_order:
         e = entity_info[entity_idx]
-        json_sequences.append(
-            {
-                e["type"]: {
-                    "sequence": e["sequence"],
-                    "count": 1,
-                    "pairedMsaPath": e["paired_path"],
-                    "unpairedMsaPath": e["unpaired_path"],
-                    "templatesPath": e["templates_json_path"],
-                }
-            }
-        )
+        chain_obj = {
+            "sequence": e["sequence"],
+            "count": 1,
+            "pairedMsaPath": e["paired_path"],
+            "unpairedMsaPath": e["unpaired_path"],
+            "templatesPath": e["templates_json_path"],
+        }
+        if e["modifications"]:
+            chain_obj["modifications"] = _build_modifications(
+                e["modifications"], e["type"]
+            )
+        json_sequences.append({e["type"]: chain_obj})
 
     # ---- Ligand entries ---------------------------------------------------
     for lig_idx, lig_entry in enumerate(ligand_list):
@@ -602,6 +622,34 @@ def main(args):
             "sequences": json_sequences,
         }
     ]
+
+    # Covalent bonds. protenix addresses an atom by entity number -- the 1-based
+    # index into `sequences` -- instead of a chain id. We emit one entry per
+    # chain (each count=1), so that index is just the chain's own index and every
+    # entry has a single copy.
+    bonds = parse_bonds(data_cfg)
+    if bonds:
+
+        def _atom(chain, res, atom, n):
+            try:
+                entity = CIF_CHAIN_CHARS.index(chain) + 1
+            except ValueError:
+                raise ValueError(
+                    f"bond references chain {chain!r}, which is not one of this "
+                    f"job's chains"
+                ) from None
+            return {
+                f"entity{n}": str(entity),
+                f"copy{n}": 1,
+                f"position{n}": str(res),
+                f"atom{n}": atom,
+            }
+
+        final_output[0]["covalent_bonds"] = [
+            {**_atom(c1, r1, a1, 1), **_atom(c2, r2, a2, 2)}
+            for c1, r1, a1, c2, r2, a2 in bonds
+        ]
+        print(f"[bonds] {len(bonds)} covalent bond(s) -> covalent_bonds")
 
     out_path = save_dir / "input.json"
     with open(out_path, "w") as f:

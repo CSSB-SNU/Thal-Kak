@@ -97,6 +97,71 @@ def resolve_ligand_smiles(ligand):
 
     raise ValueError("Each ligand must define either a 'smiles' or a 'ccd' field")
 
+
+def apply_modifications(seq, mods):
+    """Splice modified residues into a chai query sequence.
+
+    chai has no separate modification field: its FASTA parser reads a
+    parenthesised group as one residue (data/parsing/input_validation.py), so a
+    modification at 1-based position p replaces that residue with "(CCD)".
+    """
+    if not mods:
+        return seq
+    body = seq.rstrip("\n")
+    tail = seq[len(body):]  # preserve the trailing newline, if any
+    residues = list(body)
+    for m in mods:
+        residues[m["position"] - 1] = f"({m['ccd']})"
+    return "".join(residues) + tail
+
+
+# chai resolves a "(CCD)" residue through gemmi's residue table, so a code gemmi
+# does not know becomes X and one whose parent letter differs rewrites that
+# letter. Either way the query stops matching the MSA written for the unmodified
+# sequence, and chai folds that chain with no MSA, saying so only in its own log.
+_ONE_TO_THREE = {
+    "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS", "Q": "GLN",
+    "E": "GLU", "G": "GLY", "H": "HIS", "I": "ILE", "L": "LEU", "K": "LYS",
+    "M": "MET", "F": "PHE", "P": "PRO", "S": "SER", "T": "THR", "W": "TRP",
+    "Y": "TYR", "V": "VAL",
+}
+
+
+def warn_on_msa_mismatch(a3m_list):
+    """Say which chains lose their MSA to a modification, before chai runs.
+
+    Resolves the residues the way chai does -- its own protein_one_letter_sequence
+    -- so this cannot drift from what chai will actually look up.
+    """
+    from chai_lab.data.parsing.structure.sequence import protein_one_letter_sequence
+
+    copies = [a["copy"] for a in a3m_list]
+    types = [0 if a["type"] == "protein" else 1 for a in a3m_list]
+    chains_per_entity = assign_chain_indices(copies, types)
+
+    for j, a3m in enumerate(a3m_list):
+        mods = a3m.get("modifications")
+        if a3m["type"] != "protein" or not mods:
+            continue
+        with open(a3m["unpaired_path"]) as f:
+            query = f.readlines()[1].strip().upper()
+        codes = [_ONE_TO_THREE.get(c, c) for c in query]
+        for m in mods:
+            codes[m["position"] - 1] = m["ccd"]
+        view = protein_one_letter_sequence(codes)
+        if view == query:
+            continue
+        culprits = [m for m in mods if view[m["position"] - 1] != query[m["position"] - 1]]
+        named = ", ".join(f"{m['ccd']} at {m['position']}" for m in culprits)
+        seen = ", ".join(view[m["position"] - 1] for m in culprits)
+        letters = "/".join(CIF_CHAIN_CHARS[c] for c in chains_per_entity[j])
+        print(
+            f"[chai] WARNING: chain {letters} carries {named}, which chai reads "
+            f"as {seen} -- the query no longer matches the MSA, so this chain is "
+            f"predicted without one."
+        )
+
+
 def write_query_fasta(target, a3m_list, ligand_list, query_fp):
     """
     extract query sequence from unpaired MSAs
@@ -113,7 +178,9 @@ def write_query_fasta(target, a3m_list, ligand_list, query_fp):
         if a3m["type"] not in ["protein", "rna", "dna"]:
             raise ValueError("Entity must be one of protein, rna, or dna")
         with open(a3m["unpaired_path"], "r") as f:
-            seqs.append(f.readlines()[1])
+            # a3m row 0 is the query; the MSA itself stays unmodified, only the
+            # query sequence handed to chai carries the modifications.
+            seqs.append(apply_modifications(f.readlines()[1], a3m.get("modifications")))
 
     # Chain id assignment: protein round-robin first, NA next, ligands last
     # (matches the other runners and the protein-only chain_query written at
@@ -426,6 +493,14 @@ def main(data_json, chai_json):
         data_config = json.load(file)
     with open(chai_json, "r") as file:
         chai_config = json.load(file)
+
+    # chai-1 has no covalent-bond input at all, so bonds cannot be honoured.
+    n_bonds = len(data_config.get("bonds") or [])
+    if n_bonds:
+        print(
+            f"[chai] chai-1 has no covalent-bond input; {n_bonds} bond(s) "
+            f"ignored."
+        )
     
     # data_config
     if "job_name" not in data_config.keys() or data_config["job_name"] is None:
@@ -477,6 +552,9 @@ def main(data_json, chai_json):
 
     # convert a3m to pqt
     msa_parent_dir = convert_a3m_to_pqt(target, a3m_list, output_dir)
+    # The pqt files are keyed by the unmodified query; say so now if a
+    # modification will stop chai from finding one.
+    warn_on_msa_mismatch(a3m_list)
 
     # leave hits if template_hits_m8 is provided
     if "templates" in data_config.keys():

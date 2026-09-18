@@ -34,12 +34,26 @@ from rdkit import RDLogger
 
 RDLogger.DisableLog("rdApp.*")
 
+from esm.models.esmfold2.conformers import (
+    get_ccd_leaving_atoms,
+    get_ligand_ccd_atoms_with_charges,
+)
+from esm.models.esmfold2.constants import (
+    DNA_1TO3,
+    DNA_HEAVY_ATOMS,
+    PROTEIN_1TO3,
+    PROTEIN_HEAVY_ATOMS,
+    RNA_1TO3,
+    RNA_HEAVY_ATOMS,
+)
 from esm.models.esmfold2.processor import ESMFold2InputBuilder
 from esm.utils.msa.msa import MSA
 from esm.utils.parsing import FastaEntry, read_sequences
 from esm.utils.structure.input_builder import (
+    CovalentBond,
     DNAInput,
     LigandInput,
+    Modification,
     ProteinInput,
     RNAInput,
     StructurePredictionInput,
@@ -53,7 +67,7 @@ if SCRIPT_DIR not in sys.path:  # sibling imports when run as a script
 COMMON_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "common")
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
-from chain_utils import assign_chain_indices
+from chain_utils import assign_chain_indices, parse_bonds
 from chain_utils import PDB_CHAIN_CHARS, CIF_CHAIN_CHARS
 from thalkak import get_logger
 
@@ -392,13 +406,23 @@ def _make_polymer_input(entry, chain_ids, use_msa):
         raise ValueError(f"a3m entry has no paired_path or unpaired_path: {entry}")
     _, query_seq = next(iter(read_sequences(src)))
 
+    # esm's Modification.position is zero-indexed, while the data yaml (like
+    # boltz/protenix) counts residues from 1 -- shift, or every modification
+    # silently lands on the preceding residue.
+    mods = [
+        Modification(position=m["position"] - 1, ccd=m["ccd"])
+        for m in (entry.get("modifications") or [])
+    ] or None
+
     if mol_type == "protein":
         msa = _build_chain_msa(paired, unpaired) if use_msa else None
-        return ProteinInput(id=chain_ids, sequence=query_seq, msa=msa)
+        return ProteinInput(
+            id=chain_ids, sequence=query_seq, msa=msa, modifications=mods
+        )
     if mol_type == "rna":
-        return RNAInput(id=chain_ids, sequence=query_seq)
+        return RNAInput(id=chain_ids, sequence=query_seq, modifications=mods)
     if mol_type == "dna":
-        return DNAInput(id=chain_ids, sequence=query_seq)
+        return DNAInput(id=chain_ids, sequence=query_seq, modifications=mods)
     raise ValueError(f"Unsupported a3m entry type: {mol_type!r}")
 
 
@@ -409,6 +433,113 @@ def _make_ligand_input(entry, chain_ids):
         ccd = entry["ccd"]
         return LigandInput(id=chain_ids, ccd=ccd if isinstance(ccd, list) else [ccd])
     raise ValueError(f"Ligand entry has neither smiles nor ccd: {entry}")
+
+
+# Per molecule type: the 1-letter -> 3-letter map and the fixed heavy-atom list
+# a standard residue is tokenized with (esmfold2/prepare_input.py).
+_STD_RESIDUES = {
+    "protein": (PROTEIN_1TO3, PROTEIN_HEAVY_ATOMS),
+    "dna": (DNA_1TO3, DNA_HEAVY_ATOMS),
+    "rna": (RNA_1TO3, RNA_HEAVY_ATOMS),
+}
+_INPUT_MOL_TYPE = {ProteinInput: "protein", DNAInput: "dna", RNAInput: "rna"}
+
+
+def _esm_atom_names(res_name, heavy_atoms, drop_leaving):
+    """Atom names of one residue, in the order esm's tokenizer emits them.
+
+    A standard residue takes its fixed heavy-atom list; anything else (a
+    modified residue, a ligand component) is read from esm's own CCD, minus the
+    leaving atoms it drops there. Returns None if the CCD has no such component.
+    """
+    if heavy_atoms is not None and res_name in heavy_atoms:
+        return list(heavy_atoms[res_name])
+    ccd_atoms = get_ligand_ccd_atoms_with_charges(res_name)
+    if ccd_atoms is None:
+        return None
+    names = [name for name, _element, _charge in ccd_atoms]
+    if drop_leaving:
+        leaving = get_ccd_leaving_atoms(res_name)
+        names = [name for name in names if name not in leaving]
+    return names
+
+
+def _resolve_bond_atom(owner, chain, residue, atom):
+    """Turn one bond end into the (residue index, atom index) esm addresses."""
+    item = owner.get(chain)
+    if item is None:
+        raise ValueError(f"there is no chain {chain}")
+    pos = residue - 1
+
+    if isinstance(item, LigandInput):
+        if not item.ccd:
+            raise ValueError(
+                f"chain {chain} is a SMILES ligand, which has no atom names"
+            )
+        if not 0 <= pos < len(item.ccd):
+            raise ValueError(
+                f"chain {chain} has {len(item.ccd)} component(s), so no residue {residue}"
+            )
+        # A bonded ligand drops its leaving atoms (NAG loses O1).
+        names = _esm_atom_names(item.ccd[pos], None, True)
+        res_name = item.ccd[pos]
+    else:
+        mol_type = _INPUT_MOL_TYPE[type(item)]
+        one_to_three, heavy_atoms = _STD_RESIDUES[mol_type]
+        seq = item.sequence
+        if not 0 <= pos < len(seq):
+            raise ValueError(
+                f"chain {chain} has {len(seq)} residue(s), so no residue {residue}"
+            )
+        mods = {m.position: m.ccd for m in (item.modifications or [])}
+        if pos in mods:
+            # Modified residues are atom-tokenized from the CCD, never from
+            # the standard list.
+            res_name, heavy_atoms = mods[pos], None
+        else:
+            res_name = one_to_three.get(seq[pos], "UNK")
+        # Leaving atoms are kept only on the chain's final residue.
+        names = _esm_atom_names(res_name, heavy_atoms, pos != len(seq) - 1)
+
+    if names is None:
+        raise ValueError(f"esm's CCD has no component {res_name}")
+    if atom not in names:
+        raise ValueError(f"{res_name} has no atom {atom} (has {', '.join(names)})")
+    return pos, names.index(atom)
+
+
+def _build_covalent_bonds(data_cfg, sequences):
+    """Convert the data yaml's bonds into esm CovalentBonds.
+
+    esm addresses a bonded atom by its index within the residue, so each end is
+    looked up in the same atom list its tokenizer builds. An atom that cannot
+    be placed drops just that bond.
+    """
+    bonds = parse_bonds(data_cfg)
+    if not bonds:
+        return None
+    owner = {chain_id: item for item in sequences for chain_id in item.id}
+    out = []
+    for c1, r1, n1, c2, r2, n2 in bonds:
+        label = f"{c1}/{r1}/{n1} - {c2}/{r2}/{n2}"
+        try:
+            res1, atom1 = _resolve_bond_atom(owner, c1, r1, n1)
+            res2, atom2 = _resolve_bond_atom(owner, c2, r2, n2)
+        except ValueError as exc:
+            print(f"[esmfold2] ignoring bond {label}: {exc}", flush=True)
+            continue
+        out.append(
+            CovalentBond(
+                chain_id1=c1,
+                res_idx1=res1,
+                atom_idx1=atom1,
+                chain_id2=c2,
+                res_idx2=res2,
+                atom_idx2=atom2,
+            )
+        )
+        print(f"[esmfold2] bond {label} -> atom {atom1} / atom {atom2}", flush=True)
+    return out or None
 
 
 def _result_root(output_dir, target, job_name):
@@ -445,6 +576,10 @@ def main(data_yaml_path, esm_yaml_path):
         )
 
     model_variant = esm_cfg.get("model_variant", "biohub/ESMFold2")
+    # The weights are pinned the way the esm and transformers forks are. Without
+    # a revision, from_pretrained resolves the hub's moving `main`, and a config
+    # written for a newer fork than the one pinned here fails to parse. Set null
+    # to follow `main` instead.
     num_loops = int(esm_cfg.get("num_loops", 3))
     num_sampling_steps = int(esm_cfg.get("num_sampling_steps", 200))
     num_diffusion_samples = int(esm_cfg.get("num_diffusion_samples", 5))
@@ -485,7 +620,9 @@ def main(data_yaml_path, esm_yaml_path):
         ids = [CIF_CHAIN_CHARS[i] for i in chains_per_ligand[j]]
         sequences.append(_make_ligand_input(entry, ids))
 
-    spi = StructurePredictionInput(sequences=sequences)
+    spi = StructurePredictionInput(
+        sequences=sequences, covalent_bonds=_build_covalent_bonds(data_cfg, sequences)
+    )
 
     print(f"[esmfold2] loading {model_variant} ...", flush=True)
     model = ESMFold2Model.from_pretrained(model_variant).cuda().eval()
