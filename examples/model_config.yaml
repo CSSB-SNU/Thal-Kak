@@ -47,6 +47,11 @@ esmfold2:
   # Argument names match esm.ESMFold2InputBuilder.fold() / ESMFold2Model.forward().
   # Model variant: "biohub/ESMFold2" (full, supports MSA) or "biohub/ESMFold2-Fast"
   model_variant: "biohub/ESMFold2"
+  # Commit hash of the weights to load; null takes the repo's current main.
+  model_hash: 8fc3ff471022fdce52c77030685eb775de0c00a3
+  # Same, for the ESM-C language model the ESMFold2 config names -- a second
+  # repo, fetched separately.
+  esmc_hash: 89c554c46a44d825fbfbe3ce2a6bdc539770bdaa
   # MSA is only consumed by the full variant. Set false (or run -Fast) to skip
   # the merged paired+unpaired a3m construction.
   use_msa: true

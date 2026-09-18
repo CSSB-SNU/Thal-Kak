@@ -576,10 +576,11 @@ def main(data_yaml_path, esm_yaml_path):
         )
 
     model_variant = esm_cfg.get("model_variant", "biohub/ESMFold2")
-    # The weights are pinned the way the esm and transformers forks are. Without
-    # a revision, from_pretrained resolves the hub's moving `main`, and a config
-    # written for a newer fork than the one pinned here fails to parse. Set null
-    # to follow `main` instead.
+    # Weights come from two hub repos: the ESMFold2 checkpoint and the ESM-C
+    # language model its config names. A hash pins one; null follows that
+    # repo's main, whose config may not parse under the pinned transformers.
+    model_hash = esm_cfg.get("model_hash") or None
+    esmc_hash = esm_cfg.get("esmc_hash") or None
     num_loops = int(esm_cfg.get("num_loops", 3))
     num_sampling_steps = int(esm_cfg.get("num_sampling_steps", 200))
     num_diffusion_samples = int(esm_cfg.get("num_diffusion_samples", 5))
@@ -624,8 +625,22 @@ def main(data_yaml_path, esm_yaml_path):
         sequences=sequences, covalent_bonds=_build_covalent_bonds(data_cfg, sequences)
     )
 
-    print(f"[esmfold2] loading {model_variant} ...", flush=True)
-    model = ESMFold2Model.from_pretrained(model_variant).cuda().eval()
+    at = f" @ {model_hash[:12]}" if model_hash else " @ main"
+    print(f"[esmfold2] loading {model_variant}{at} ...", flush=True)
+    model = (
+        ESMFold2Model.from_pretrained(
+            model_variant, revision=model_hash, load_esmc=not esmc_hash
+        )
+        .cuda()
+        .eval()
+    )
+    if esmc_hash:
+        # load_esmc() takes a path, not a hash, so resolve the snapshot first.
+        from huggingface_hub import snapshot_download
+
+        esmc_id = model.config.esmc_id
+        print(f"[esmfold2] loading {esmc_id} @ {esmc_hash[:12]} ...", flush=True)
+        model.load_esmc(snapshot_download(esmc_id, revision=esmc_hash))
     # Held for the whole folding loop: the offloader's hooks and the
     # confidence-head patch stay in place only while this is alive.
     accel_label, _accel_keepalive = _configure_acceleration(model, esm_cfg)

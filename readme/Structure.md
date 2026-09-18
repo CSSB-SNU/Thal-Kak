@@ -336,6 +336,8 @@ use_tfg_guidance: bool    # enable Training-Free Guidance (TFG) sampling
 
 ```yaml
 model_variant: str          # "biohub/ESMFold2" (full, MSA-capable) or "biohub/ESMFold2-Fast"
+model_hash: str | null      # commit hash of the weights; null takes the repo's current main
+esmc_hash: str | null       # same, for the ESM-C language model the ESMFold2 config names
 use_msa: bool               # only the full variant consumes MSA; false (or -Fast) skips a3m construction
 num_loops: int              # trunk refinement iterations
 num_sampling_steps: int     # diffusion sampling steps per sample
