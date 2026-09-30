@@ -58,7 +58,7 @@ from esm.utils.structure.input_builder import (
     RNAInput,
     StructurePredictionInput,
 )
-from transformers.models.esmfold2.modeling_esmfold2 import ESMFold2Model
+from esm.models.esmfold2 import EsmFold2Model as ESMFold2Model
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

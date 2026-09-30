@@ -48,10 +48,13 @@ extra-index-urls = ["https://download.pytorch.org/whl/cu126"]
 # The pytorch index also carries old builds of common packages (tqdm, etc.);
 # consider every index so pinned PyPI versions aren't shadowed by it.
 index-strategy = "unsafe-best-match"
-# Mirror `pip install --no-deps` for boltz/chai/protenix: their pyproject pins
-# conflict with the unified env (chai numpy~=1.21/gemmi~=0.6.3; protenix pins a
-# whole divergent set). Override each so uv accepts the env's chosen versions.
-dependency-overrides = { numpy = ">=2", gemmi = ">=0.7", tqdm = ">=4.67", matplotlib = ">=3.10", rdkit = ">=2024", biopython = "==1.84", biotite = "==1.6.0", modelcif = "==1.2", wandb = "==0.18.7", pandas = ">=2", protobuf = "==6.31.1", numba = ">=0.61", llvmlite = ">=0.44", scipy = ">=1.16", dm-tree = ">=0.1.8", scikit-learn = ">=1.6", ipywidgets = ">=8.1", pyyaml = ">=6.0", requests = ">=2.32" }
+# Mirror `pip install --no-deps` for boltz/chai/protenix/esm: their pyproject
+# pins conflict with the unified env (chai numpy~=1.21/gemmi~=0.6.3; protenix
+# pins a whole divergent set; esm pins torch 2.11 and cuequivariance 0.8.1+).
+# Override each so uv accepts the env's chosen versions. pixi has no per-package
+# --no-deps, so a never-true marker is how esm's cu13 dependency is dropped: it
+# goes unused here and would otherwise pull the CUDA 13 runtime.
+dependency-overrides = { numpy = ">=2", gemmi = ">=0.7", tqdm = ">=4.67", matplotlib = ">=3.10", rdkit = ">=2024", biopython = "==1.84", biotite = "==1.6.0", modelcif = "==1.2", wandb = "==0.18.7", pandas = ">=2", protobuf = "==6.31.1", numba = ">=0.61", llvmlite = ">=0.44", scipy = ">=1.16", dm-tree = ">=0.1.8", scikit-learn = ">=1.6", ipywidgets = ">=8.1", pyyaml = ">=6.0", requests = ">=2.32", torch = "==2.7.1", cuequivariance-torch = "==0.8.0", cuequivariance-ops-torch-cu13 = { version = "*", env-markers = "platform_system == 'NoSuchSystem'" } }
 
 # ---- pip deps (scientific stack moved to [dependencies] above) ----
 [pypi-dependencies]
@@ -71,8 +74,8 @@ dm-tree = "==0.1.10"
 einops = "==0.8.0"
 einx = "==0.3.0"
 wandb = "==0.18.7"
-esm = { git = "https://github.com/Biohub/esm.git", rev = "cf002f1d2fb9220a0918fc8c5ea4e3b56d28fbaf" }
-transformers = { git = "https://github.com/Biohub/transformers.git", rev = "ef32577f55da19a4989cd7b22e004dc43a4998cb" }
+esm = "==3.4.1.post1"
+transformers = ">=4.57.6,<5"
 accelerate = "==1.13.0"
 tokenizers = "==0.22.2"
 huggingface_hub = "==0.36.2"
