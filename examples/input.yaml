@@ -5,7 +5,7 @@
 Method:
   jobname: T1201        # names outputs and the generated FASTA
   msa: colab            # colab | custom | mmseqs_local | hhblits_local | mmseqs_hhblits_local
-  structure: [boltz2, chai1, protenix_v1, protenix_v2, esmfold2, opendde, opendde_abag]   # the only field that may be a list (run in order)
+  structure: [boltz2, chai1, protenix_v1, esmfold2, opendde, opendde_abag]   # the only field that may be a list (run in order)
   relax: openmm         # none | openmm
   top5_metric: ranking_score  # top-5 ranking: ranking_score | ptm | iptm | plddt (default ranking_score)
   n_seed: 5             # optional (default 5)

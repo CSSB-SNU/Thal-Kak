@@ -38,7 +38,7 @@ The pipeline consists of three modular stages, each of which can be run independ
 | Stage | Options |
 |-------|---------|
 | MSA (`--msa`) | `colab`, `custom`, `mmseqs_local`, `hhblits_local`, `mmseqs_hhblits_local` |
-| Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `protenix_v2`, `esmfold2`, `opendde`, `opendde_abag` |
+| Structure (`--structure`) | `boltz2`, `chai1`, `protenix_v1`, `esmfold2`, `opendde`, `opendde_abag` |
 | Relaxation (`--relax`) | `none`, `openmm` |
 
 The `colab` MSA uses the remote ColabFold server and needs no local database.
@@ -100,7 +100,7 @@ checkpoints (downloaded automatically on each model's first run).
 | pixi env | `.pixi/` | ~11 GiB |
 | Boltz-2 checkpoint | `~/.boltz` | 7.6 GiB |
 | Chai-1 checkpoint | `Structure/submodules/chai-lab/downloads/` | 6.6 GiB |
-| Protenix checkpoint | `Structure/submodules/protenix/{checkpoint,common}/` | 2.4 GiB (`protenix_v2`; +1.4 GiB to also run `protenix_v1`) |
+| Protenix checkpoint | `Structure/submodules/protenix/{checkpoint,common}/` | 2.4 GiB |
 | ESMFold2 checkpoint | `~/.cache/huggingface/` (ESM-C 6B backbone) | 25 GiB |
 | OpenDDE checkpoint | `~/.cache/opendde/{checkpoint,common}/` | 3.1 GiB (`opendde`; +2.5 GiB to also run `opendde_abag`) |
 
@@ -176,15 +176,6 @@ Installing the local MSA and template databases is covered in
 Each structure-prediction model downloads its own weights to its default cache
 location on first run (e.g. `~/.boltz` for Boltz-2, `~/.cache/huggingface` for
 ESMFold2).
-
-`protenix_v2` is an exception: its official `protenix-v2` checkpoint endpoint
-currently returns HTTP 403 for public requests. When the checkpoint is missing,
-the pipeline downloads it from a community mirror and verifies it against a
-pinned SHA-256 before use (a mismatch aborts the run). To supply your own copy
-instead, place `protenix-v2.pt` in the protenix checkpoint directory
-(`$PROTENIX_CHECKPOINT_DIR` if set, otherwise
-`Structure/submodules/protenix/checkpoint/`). `protenix_v1` is unaffected — its
-checkpoint still downloads from the official endpoint.
 
 The vendored model sources live under `Structure/submodules/` and were pulled in
 as git subtrees; see [readme/subtrees.yaml](readme/subtrees.yaml) for their

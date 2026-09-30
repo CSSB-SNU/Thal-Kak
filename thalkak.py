@@ -7,7 +7,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 # (full_args_from_input), so both interfaces validate against one list.
 MSA_CHOICES = ["colab", "custom", "mmseqs_local", "hhblits_local", "mmseqs_hhblits_local"]
 STRUCTURE_CHOICES = [
-    "boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2",
+    "boltz2", "chai1", "protenix_v1", "esmfold2",
     "opendde", "opendde_abag",
 ]
 RELAX_CHOICES = ["none", "openmm"]

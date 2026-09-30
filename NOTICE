@@ -231,16 +231,10 @@ Each backend downloads its own trained parameters on first run. They are not
 redistributed here, and their providers release them on the same terms as the
 corresponding code above.
 
-The Protenix "protenix-v2" checkpoint is not currently served by its official
-endpoint (which returns HTTP 403 for public requests). When the checkpoint is
-absent, the pipeline downloads it at runtime from a third-party mirror
-(huggingface.co/TMF001/pxdesign-weights) and verifies it against a pinned
-SHA-256 before loading. That mirror is not affiliated with the Protenix
-authors; the SHA-256 check ensures the fetched file is byte-identical to the
-known-good checkpoint and refuses to load anything else. Protenix's code and
-model parameters are both released under the Apache License 2.0 (per the
-Protenix README), so redistribution of the checkpoint is permitted; users may
-substitute an official copy where one is available.
+Protenix's "protenix-v2" checkpoint is not among them: its weights are
+proprietary to the rights holder and are not redistributable, so Thal-Kak does
+not fetch or expose that model. The Protenix generation this pipeline runs
+(protenix_v1) is served by the official endpoint under the Apache License 2.0.
 
 ================================================================================
 Reference databases REDISTRIBUTED as downloadable archives

@@ -7,25 +7,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 log = get_logger("structure")
 
-# Protenix ships several model generations; Thal-Kak exposes two of them as
-# separate structure methods. protenix_v1 runs a v1-generation checkpoint
-# (default protenix_base_default_v1.0.0, 368M base), protenix_v2 the 464M
-# scaled-up protenix-v2. Both support MSA, RNA MSA and templates; only
-# protenix_v2 accepts Training-Free Guidance. The checkpoint stays a config
-# key (`model_name`) so a section can pick another checkpoint of its own
-# generation, e.g. protenix_base_20250630_v1.0.0 for protenix_v1.
-
-# The protenix-v2 checkpoint is no longer served by the official endpoint
-# (it returns HTTP 403 AccessDenied for everyone). It is fetched from a
-# community mirror and verified against this SHA-256 before use: protenix
-# loads checkpoints with torch.load(weights_only=False), so an unverified
-# file could execute arbitrary code. A digest mismatch aborts the run.
-_PROTENIX_V2_MIRROR_URL = (
-    "https://huggingface.co/TMF001/pxdesign-weights/resolve/main/checkpoint/protenix-v2.pt"
-)
-_PROTENIX_V2_SHA256 = (
-    "8f931f9774a396b67033d0e58628e1834f4a1448165e04254b40a780b0c0d599"
-)
+# Thal-Kak exposes Protenix's v1 generation. protenix_v1 runs a v1-generation
+# checkpoint (default protenix_base_default_v1.0.0, 368M base) and supports MSA,
+# RNA MSA and templates. The checkpoint stays a config key (`model_name`) so a
+# section can pick another checkpoint of the same generation, e.g.
+# protenix_base_20250630_v1.0.0.
 
 
 def _sha256_of(path, chunk=1 << 20):
@@ -197,18 +183,10 @@ def structure_prediction(args):
             with log_stream(log):
                 result_root = run_esmfold2(args.data_config, model_config)
 
-        case "protenix_v1" | "protenix_v2":
+        case "protenix_v1":
             with open(model_config) as f:
                 protenix_yaml = yaml.safe_load(f)
             protenix_model_name = protenix_yaml["model_name"]
-            # TFG is wired for v2 only; reject the key in a v1 section before
-            # doing any work, rather than silently dropping it.
-            if args.model == "protenix_v1" and "use_tfg_guidance" in protenix_yaml:
-                raise SystemExit(
-                    "protenix_v1 does not take use_tfg_guidance; it is a "
-                    "protenix_v2 option. Remove it from the protenix_v1 "
-                    "section of the model config."
-                )
             log.info(f"Running inference with Protenix ({protenix_model_name})...")
             protenix_root = f"{ROOT}/Structure/submodules/protenix"
             seed = data_yaml["seed"]
@@ -241,17 +219,9 @@ def structure_prediction(args):
             if protenix_root not in sys.path:
                 sys.path.insert(0, protenix_root)
             # protenix runs in its own process. It merges a model's overrides
-            # into its module-level config dicts in place -- runner/inference.py
-            # builds base_configs as a shallow {**configs_base}, so the nested
-            # sections are the module's own objects and deep_update writes
-            # straight through them. Two generations in one interpreter would
-            # therefore build the second model with the first one's
-            # architecture: after protenix_v2, msa_module.c_z holds the literal
-            # 256 and hidden_scale_up is True (the GlobalConfigValue sentinels
-            # that would resolve them back are gone), and the protenix_v1
-            # checkpoint does not fit that shape. A fresh interpreter starts
-            # from pristine defaults. protenix reads sys.argv[1:], so the
-            # argument list below is the same either way.
+            # into its module-level config dicts in place, so a second model in
+            # the same interpreter would inherit the first one's architecture.
+            # A fresh interpreter starts from pristine defaults.
             inference_argv = [
                 sys.executable,
                 os.path.join(protenix_root, "runner", "inference.py"),
@@ -275,20 +245,6 @@ def structure_prediction(args):
                 "PROTENIX_CHECKPOINT_DIR"
             ) or os.path.join(protenix_root, "checkpoint")
             inference_argv += ["--load_checkpoint_dir", protenix_ckpt_dir]
-
-            # protenix-v2 weights are no longer downloadable from the official
-            # endpoint (403); fetch + verify them from the mirror if absent.
-            # Every other checkpoint is still served, so protenix downloads
-            # those itself on first run.
-            if protenix_model_name == "protenix-v2":
-                v2_path = os.path.join(protenix_ckpt_dir, "protenix-v2.pt")
-                if not os.path.exists(v2_path):
-                    _fetch_verified(
-                        _PROTENIX_V2_MIRROR_URL,
-                        v2_path,
-                        _PROTENIX_V2_SHA256,
-                        "protenix-v2.pt",
-                    )
 
             min_size_test = protenix_yaml.get("data.msa.min_size.test")
             if min_size_test is not None:
@@ -323,19 +279,6 @@ def structure_prediction(args):
                     "--infer_setting.dynamic_chunk_size", "false",
                     "--infer_setting.chunk_size", str(chunk_size),
                 ]
-
-            if protenix_yaml.get("use_tfg_guidance"):
-                # TFG's VinaStericPotential crashes on single-chain inputs:
-                # potentials.py:1206 calls a closure with 2 positional args that
-                # is defined to take 1. Skip TFG for monomers until upstream fixes.
-                total_chains = sum(e.get("copy", 1) for e in data_yaml.get("a3m") or [])
-                total_chains += sum(l.get("copy", 1) for l in data_yaml.get("ligand") or [])
-                if total_chains == 1:
-                    log.info(
-                        "Skipping TFG: monomer input triggers protenix VinaSteric bug."
-                    )
-                else:
-                    inference_argv += ["--sample_diffusion.guidance.enable", "true"]
 
             # protenix imports `configs` / `protenix` / `runner` as top-level
             # packages from its own root, which running the script by path does
@@ -480,7 +423,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         choices=[
-            "boltz2", "chai1", "protenix_v1", "protenix_v2", "esmfold2",
+            "boltz2", "chai1", "protenix_v1", "esmfold2",
             "opendde", "opendde_abag",
         ],
         help="The model to use for inference.",

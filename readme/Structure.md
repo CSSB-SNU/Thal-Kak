@@ -15,7 +15,6 @@ MSA  ──►  data yaml + model yaml  ──►  [Structure]  ──►  commo
 | `boltz2` | Boltz-2 | `~/.boltz` |
 | `chai1` | Chai-1 | `Structure/submodules/chai-lab/downloads/` |
 | `protenix_v1` | Protenix v1 generation (`protenix_base_default_v1.0.0`, 368M base) | `Structure/submodules/protenix/checkpoint/` |
-| `protenix_v2` | Protenix `protenix-v2` (464M scaled-up) | `Structure/submodules/protenix/checkpoint/` |
 | `esmfold2` | ESMFold2 (MSA-free or MSA-augmented) | `~/.cache/huggingface/` |
 | `opendde` | OpenDDE `opendde_v1`, general checkpoint | `~/.cache/opendde/` |
 | `opendde_abag` | OpenDDE `opendde_v1`, antibody-antigen checkpoint | `~/.cache/opendde/` |
@@ -33,7 +32,7 @@ thalkak structure --model boltz2 \
 ## Inputs
 
 - `--data_config`: data yaml, produced by the [MSA](MSA.md) stage (`thalkak msa` writes it to `<output_dir>/<target>.yaml`). The fields `job_name`, `output_dir`, and `seed` must be filled in. `seed` may be a single int or a list of ints. See [Data yaml schema](#data-yaml-schema).
-- `--model_config`: model config yaml, keyed by model name — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2` / `opendde` / `opendde_abag`); the requested model's section is extracted automatically. Default `examples/model_config.yaml`. See [Model yaml schemas](#model-yaml-schemas).
+- `--model_config`: model config yaml, keyed by model name — one section per model (`boltz2` / `chai1` / `protenix_v1` / `esmfold2` / `opendde` / `opendde_abag`); the requested model's section is extracted automatically. Default `examples/model_config.yaml`. See [Model yaml schemas](#model-yaml-schemas).
 
 ## Outputs
 
@@ -224,7 +223,7 @@ BBBBBBBBBBBBBBBBBBBBB
 
 ## Model yaml schemas
 
-The pipeline ships defaults in `examples/model_config.yaml` — one section per model (`boltz2` / `chai1` / `protenix_v1` / `protenix_v2` / `esmfold2` / `opendde` / `opendde_abag`), keyed by model name. Edit the section for the model you're invoking; the schemas below describe each section's keys.
+The pipeline ships defaults in `examples/model_config.yaml` — one section per model (`boltz2` / `chai1` / `protenix_v1` / `esmfold2` / `opendde` / `opendde_abag`), keyed by model name. Edit the section for the model you're invoking; the schemas below describe each section's keys.
 
 <details>
 <summary><b>Boltz-2</b></summary>
@@ -306,12 +305,11 @@ See the [Chai-1 official README](https://github.com/chaidiscovery/chai-lab/blob/
 </details>
 
 <details>
-<summary><b>Protenix (<code>protenix_v1</code> / <code>protenix_v2</code>)</b></summary>
+<summary><b>Protenix (<code>protenix_v1</code>)</b></summary>
 
-The two methods run different Protenix generations. `model_name` is required and names the checkpoint: the shipped config sets `protenix_base_default_v1.0.0` (368M base) for `protenix_v1` and `protenix-v2` (464M scaled-up) for `protenix_v2`. Change it to select another checkpoint of the same generation, e.g. `protenix_base_20250630_v1.0.0` for `protenix_v1`. Both support MSA, RNA MSA, and templates.
+`model_name` is required and names the checkpoint: the shipped config sets `protenix_base_default_v1.0.0` (368M base). Change it to select another checkpoint of the same generation, e.g. `protenix_base_20250630_v1.0.0`. MSA, RNA MSA, and templates are all supported.
 
 ```yaml
-# protenix_v1
 model_name: str           # Protenix checkpoint name, e.g. protenix_base_default_v1.0.0
 N_cycle: int              # number of recycling iterations
 N_sample: int             # number of diffusion samples
@@ -320,16 +318,9 @@ chunk_size: int | null    # Optional. Tile the pairformer and template stacks ov
 data.msa.min_size.test: int | null   # Optional. MSA subsampling: null/omit = Protenix native per-recycle subsampling; set 16384 (featurization cap) to force full MSA (raw MSAs deeper than 16384 are truncated at featurization)
 ```
 
-```yaml
-# protenix_v2 — same keys (model_name is e.g. protenix-v2), plus:
-use_tfg_guidance: bool    # enable Training-Free Guidance (TFG) sampling
-```
-
 **`chunk_size`**: Protenix tiles its triangle operations over `N_token` blocks, which is what keeps the pair stacks in memory on a small GPU. Two details make the key less straightforward than it looks. Protenix's own dynamic sizing (`infer_setting.dynamic_chunk_size`, on by default) discards whatever `chunk_size` it is handed and picks from a threshold table that leaves everything up to 1024 tokens untiled, so Thal-Kak switches the dynamic path off whenever this key is set — setting a size without that has no effect. And below compute capability 8.0 (V100, T4) Protenix pins `dtype` to fp32 and both triangle kernels to the pure-PyTorch path whatever Thal-Kak requests, which is exactly where the untiled stacks stop fitting: the template embedder's attention logits are `[N_token, heads, N_token, N_token]`, 5.8 GB at 714 tokens in fp32, against the 15 GiB of a T4. `null` therefore means automatic — Protenix's own dynamic sizing at capability >= 8.0, and 512 below it. 512 is chosen so that anything up to 512 tokens runs in a single tile and pays no tiling cost at all; the trade is the ceiling, since the tiled peak grows as `chunk x N_token^2` and 512 tops out near 780 tokens on a 15 GiB card where 256 would reach about 1100. Targets past that ceiling need upwards of 25 minutes per seed on such a GPU, so little is given up.
 
-**`use_tfg_guidance`** (`protenix_v2` only): when `True`, the runner turns on Protenix's Training-Free Guidance pass, which refines diffusion sampling without retraining the model, at the cost of extra inference time per sample. Leave `False` for vanilla sampling. It is skipped automatically for single-chain inputs, which trip a Protenix bug in the steric potential. Putting this key in a `protenix_v1` section is an error rather than a silent no-op.
-
-`protenix_v2` weights are no longer downloadable from Protenix's official endpoint; see [the note in the top-level README](../README.md#install) for how they are fetched and verified. `protenix_v1` weights download normally on first run.
+`protenix_v1` weights download from Protenix's official endpoint on first run.
 
 </details>
 
