@@ -285,7 +285,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input", type=str, required=True, help="Path to Protenix output directory")
     parser.add_argument("--option", type=str, required=True, help="Method to run Protenix prediction")
     parser.add_argument("--model", type=str, required=True,
-                        choices=["protenix_v1", "protenix_v2"],
-                        help="Protenix variant recorded in the summary")
+                        choices=["protenix_v1", "protenix_v2",
+                                 "opendde", "opendde_abag"],
+                        help="Model recorded in the summary")
     args = parser.parse_args()
     process_protenix_results(args.input, args.option, args.model)

@@ -1,5 +1,5 @@
 # Unified Thal-Kak env: orchestrator + OpenMM relaxation +
-# structure prediction models (boltz, chai-1, esmfold2, protenix) +
+# structure prediction models (boltz, chai-1, esmfold2, protenix, opendde) +
 # ColabFold MSA generation.
 #
 # Install with:
