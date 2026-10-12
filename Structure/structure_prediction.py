@@ -1,4 +1,4 @@
-import argparse, yaml, os, glob, sys
+import argparse, gc, yaml, os, glob, sys
 from datetime import datetime
 
 from thalkak import get_logger, log_stream, run_logged
@@ -126,6 +126,19 @@ def _resolve_model_config(model, model_config):
     return out
 
 
+def _release_cuda_cache():
+    """Return this process's cached CUDA blocks to the driver.
+
+    chai1 and esmfold2 run in-process, so what their allocator cached outlives
+    the stage and is invisible to the models that follow -- including the ones
+    that run as subprocesses and see only what is left on the device."""
+    torch = sys.modules.get("torch")
+    if torch is None or not torch.cuda.is_available():
+        return
+    gc.collect()
+    torch.cuda.empty_cache()
+
+
 def structure_prediction(args):
     # Shared by every torch predictor (boltz/chai/esmfold2/protenix): expandable
     # CUDA segments let the caching allocator grow/reuse one virtual arena
@@ -134,6 +147,9 @@ def structure_prediction(args):
     # allocator reads it at the first allocation). setdefault so an explicit
     # outer override still wins.
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+    # Also on the way in: a stage that raised never reached the release below.
+    _release_cuda_cache()
 
     with open(args.data_config) as f:
         data_yaml = yaml.safe_load(f)
@@ -398,6 +414,8 @@ def structure_prediction(args):
                 os.system(f"mv {file} {result_root}/common/")
             for file in glob.glob(f"{opendde_output}/*.csv"):
                 os.system(f"mv {file} {result_root}/common/")
+
+    _release_cuda_cache()
 
     # Write method log (inherit from MSA)
     method_log_path = data_yaml.get("method_log")
