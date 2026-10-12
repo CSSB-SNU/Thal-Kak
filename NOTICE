@@ -205,6 +205,10 @@ prominent notice has been added to the affected files (Apache-2.0 Sec. 4(b)).
      - MODIFIED by CSSB Thal-Kak (2026):
          * opendde/model/sample_confidence.py — write the CA-only PAE matrix
            into summary_confidence whether or not full data was requested.
+         * opendde/data/template/{template_featurizer,template_parser,
+           template_utils}.py — accept templates in the AF3-style JSON format
+           this pipeline writes, alongside .hhr and .a3m. Ported from Protenix
+           (entry 1 above), which produces identical features on the same input.
 
 ================================================================================
 Third-party runtime dependencies (NOT redistributed; installed via pip/conda)

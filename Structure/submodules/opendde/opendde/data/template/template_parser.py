@@ -355,6 +355,70 @@ class TemplateParser:
         return data not in (".", "?")
 
     @staticmethod
+    def parse_simple_cif(
+        *,
+        file_id: str,
+        mmcif_string: str,
+        catch_all_errors: bool = True,
+    ) -> ParsingResult:
+        """Parses an simplified mmCIF string into an MmcifObject.
+        Since the simplified mmCIF might lack complete polymer metadata, we extract the first available chain
+        and rely on the residues directly."""
+        errors = {}
+        try:
+            parser = PDB.MMCIFParser(QUIET=True)
+            structure = parser.get_structure(file_id, io.StringIO(mmcif_string))
+            first_model = TemplateParser._get_first_model(structure)
+
+            chains = list(first_model.get_chains())
+            if not chains:
+                return ParsingResult(None, {(file_id, ""): "No chains found in simplified mmCIF."})
+
+            # simplified templates typically contain exactly one chain
+            chain = chains[0]
+            chain_id = chain.id
+
+            seq_to_structure_mappings = collections.defaultdict(dict)
+            auth_chain_to_seq = {}
+
+            residues = list(chain.get_residues())
+            template_seq_list = []
+
+            for idx, res in enumerate(residues):
+                resname = res.get_resname()
+                template_seq_list.append(PDBData.protein_letters_3to1.get(resname, "X"))
+
+                hetflag, resseq, icode = res.get_id()
+                pos = ResiduePosition(
+                    chain_id=chain_id,
+                    residue_number=resseq,
+                    insertion_code=icode,
+                )
+                seq_to_structure_mappings[chain_id][idx] = ResidueAtPosition(
+                    position=pos,
+                    name=resname,
+                    is_missing=False,
+                    hetflag=hetflag,
+                )
+
+            auth_chain_to_seq[chain_id] = "".join(template_seq_list)
+
+            mmcif_obj = MmcifObject(
+                file_id=file_id,
+                header={},
+                structure=first_model,
+                chain_to_seqres=auth_chain_to_seq,
+                seqres_to_structure=seq_to_structure_mappings,
+                raw_string=parser._mmcif_dict,
+            )
+            return ParsingResult(mmcif_object=mmcif_obj, errors=errors)
+        except Exception as e:
+            errors[(file_id, "")] = e
+            if not catch_all_errors:
+                raise
+            return ParsingResult(None, errors=errors)
+
+    @staticmethod
     @functools.lru_cache(maxsize=16)
     def parse(
         *,

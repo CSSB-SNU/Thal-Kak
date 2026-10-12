@@ -21,6 +21,7 @@ from opendde.data.template.template_utils import (
     TemplateHitFeaturizer,
 )
 from opendde.data.utils import pad_to
+from opendde.utils.file_io import load_json_cached
 from opendde.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -292,25 +293,33 @@ class InferenceTemplateFeaturizer:
             templates = []
             if t_path and use_template and online_template_featurizer:
                 assert ctype == PROTEIN_CHAIN, "Only protein templates are supported."
-                with open(t_path, "r") as f:
-                    content = f.read()
-
-                if t_path.endswith(".hhr"):
-                    hits = HHRParser.parse(hhr_string=content)
-                elif t_path.endswith(".a3m"):
-                    hits = HmmsearchA3MParser.parse(
-                        query_seq=seq, a3m_str=content, skip_first=False
+                if t_path.endswith(".json"):
+                    json_list = load_json_cached(t_path)
+                    results = online_template_featurizer.parse_json_templates(
+                        json_list, seq
                     )
+                    templates = results.features
                 else:
-                    raise ValueError(f"Unsupported template format: {t_path}")
+                    with open(t_path, "r") as f:
+                        content = f.read()
 
-                result, _ = online_template_featurizer.get_templates(
-                    sequence_uid=seq,
-                    query_sequence=seq,
-                    hits=hits,
-                    max_template_date=None,
-                )
-                templates = result.features
+                    if t_path.endswith(".hhr"):
+                        hits = HHRParser.parse(hhr_string=content)
+                    elif t_path.endswith(".a3m"):
+                        hits = HmmsearchA3MParser.parse(
+                            query_seq=seq, a3m_str=content, skip_first=False
+                        )
+                    else:
+                        raise ValueError(f"Unsupported template format: {t_path}")
+
+                    result, _ = online_template_featurizer.get_templates(
+                        sequence_uid=seq,
+                        query_sequence=seq,
+                        hits=hits,
+                        max_template_date=None,
+                    )
+                    templates = result.features
+
                 logger.info(f"Found {len(templates)} templates for sequence {seq}")
 
             for i in range(count):
