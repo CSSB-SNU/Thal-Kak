@@ -1,14 +1,4 @@
-<!-- Draft. Lives at aws_open_data/README.md in CSSB-SNU/Thal-Kak and is also
-     uploaded to the bucket root as README.md. Adapted from the Hugging Face
-     dataset card; only what differs between Hugging Face and AWS was changed.
-     Before launch: point the nine matching rows of
-     install/manifest/databases.tsv at this bucket, and remove the status note. -->
-
 # Thal-Kak Multiple Sequence Alignment Databases
-
-> **Status: in preparation.** The bucket `s3://thal-kak-msa` and its Registry
-> of Open Data page are not live yet, so the links and commands below do not
-> work yet.
 
 The sequence databases that the local MSA modes of
 **[Thal-Kak](https://github.com/CSSB-SNU/Thal-Kak)** search —
